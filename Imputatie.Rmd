@@ -2,29 +2,245 @@
 title: "Imputatie COVID data"
 author: "Hanne Oberman"
 date: "`r Sys.Date()`"
-output: html_document
+output: 
+  html_document:
+    toc: true
+    toc_depth: 5
+    toc_float: true
+    number_sections: true
 ---
 
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(include = FALSE)
+<style type="text/css">
+
+body{ /* Normal  */
+      font-size: 12px;
+  }
+td {  /* Table  */
+  font-size: 12px;
+}
+h1.title {
+  font-size: 20px;
+  color: DarkBlue;
+}
+h1 { /* Header 1 */
+  font-size: 18px;
+}
+h2 { /* Header 2 */
+    font-size: 16px;
+}
+h3 { /* Header 3 */
+  font-size: 14px;
+}
+code.r{ /* Code block */
+    font-size: 12px;
+}
+pre { /* Code block - determines code spacing between lines */
+    font-size: 12px;
+}
+</style>
+
+---
+
+# Packages and functions used
+```{r setup, include=TRUE, message=FALSE, warning=TRUE}
 # setup environment
-library(haven)
-library(readxl)
-library(tidyverse)
-library(mice)
-library(miceadds)
-library(ggmice)
-library(lme4)
+library(haven)      # For importing SPSS data
+library(readxl)     # For reading excel files
+library(tidyverse)  # All things useful
+library(mice)       # For incomplete data analysis
+library(miceadds)   # Additions to mice
+library(ggmice)     # Plotting device for mice
+library(lme4)       # Linear mixed-effect modeling
+library(plyr)       # Data wrangling
+library(magrittr)   # Pipes in R
+
+# Define function for `not in`
 `%nin%` <- Negate(`%in%`)
+
+# Function for the mode of a vector
 modus <- function(x) {
   ux <- unique(x)
   ux[which.max(tabulate(match(x, ux)))]
 }
 ```
 
-# Data
+---
+
+# Import the data
 ```{r}
-dat_raw <- read_sav(url("https://surfdrive.surf.nl/files/index.php/s/Ng6KkVRgxNQtKCM"))
-# https://surfdrive.surf.nl/files/index.php/f/11746447583
+dat_raw <- read_sav("data.zsav")
 ```
+
+---
+
+# Data editing
+
+---
+
+## Rename and clean labels
+```{r}
+dat_rename <- janitor::clean_names(dat_raw)
+vars <- names(dat_rename)
+```
+
+---
+
+## Make time dimension consistent
+The following step adds non-observed measurement occasions when participants do not have all measurement occasions observed. 
+```{r}
+dat_meting <- expand.grid(id = unique(dat_rename$id), meting = 1:5)
+dat_long <- full_join(dat_rename, dat_meting)
+```
+
+---
+
+## Recode `isco` to `oesch`
+```{r}
+oesch <- read_excel("oesch.xlsx")
+dat_oesch <- dat_long %>% 
+  mutate(isco08 = as.character(isco08))
+dat_oesch$oesch <- mapvalues(dat_oesch$isco08, 
+                             from = oesch$ISCO, 
+                             to = oesch$OESCH)
+```
+
+---
+
+### Clean `oesch` codes
+```{r}
+dat_clean <- dat_oesch %>% 
+  zap_labels() %>% 
+  select(-isco08, -weegfactor) %>% 
+  mutate(across(everything(), as.numeric),
+         oesch = na_if(oesch, 99),
+         oesch = na_if(oesch, 110),
+         oesch = na_if(oesch, 310),
+         oesch = na_if(oesch, 4111),
+         oesch = na_if(oesch, 7536),
+         .after = meting) %>% 
+  rowwise() %>% 
+  mutate(q43 = mean(c(q43_wave1, q43_wave2tot5), na.rm = TRUE),
+         q43 = na_if(q43, "NaN"),
+         .keep = "unused")
+```
+
+---
+
+## Add polynomial for measurement occasion
+```{r}
+dat_clean %<>%
+  mutate(meting_mnd = recode_factor(meting, 
+                                    `1` = "0", 
+                                    `2` = "3", 
+                                    `3` = "7", 
+                                    `4` = "12", 
+                                    `5` = "17") %>% 
+           as.character() %>% as.numeric(),
+         meting_squared = meting_mnd * meting_mnd)
+```
+
+---
+
+## Create variable vectors for imputation models
+```{r}
+vars_outcome <- c("q60_1", "q49_1", "q49_2", "q49_3", "q49_4", "q49_5", "q49_6")
+vars_fixed <- c("edu", "oesch", "geboortejaar", "q29", "q52", "q53", "q54", "sekse", "etn_herkomst")
+vars_random <- c("meting_mnd", "meting_squared", "q43", "q48_1", "q48_9", "q48_10", "q48_11", "q48_12", "q47_1", "q47_2", "q47_3", "q33_1", "q33_2", "q33_3", "q33_4", "q33_5", "q33_6")
+vars_covariates <- c("q34_1", "q34_2", "q34_3", "q34_4", "q34_5", "q38_1", "q38_2", "q38_3", "q38_4", "q31_1", "q31_2", "q31_3", "q31_4", "q31_5", "q31_6", "q31_7", "q59", "q60_2", "q60_3", "q60_4", "q60_8", "q60_10", "q60_12")
+vars_analyse <- c("id", vars_outcome, vars_fixed, vars_random)
+vars <- names(dat_clean)
+```
+
+---
+
+# Imputation
+
+---
+
+## impute fixed variables
+```{r}
+dat_clean %<>% 
+  group_by(id) %>% 
+  mutate(across(all_of(vars_fixed), ~ modus(.x))) %>% 
+  ungroup()
+### CHECK IF INCONSISTENCIES ARE GONE and if missings are preserved?
+```
+
+---
+
+## select relevant variables
+```{r}
+dat_imp <- dat_clean[c(vars_analyse, vars_covariates)]
+dat_imp[sapply(dat_imp, is.nan)] <- NA
+vars <- names(dat_imp)
+```
+
+---
+
+## inspect missingness
+```{r}
+md.pattern(dat_imp[vars_fixed], rotate.names = TRUE)
+md.pattern(dat_imp[vars_outcome], rotate.names = TRUE)
+md.pattern(dat_imp[vars_random], rotate.names = TRUE, plot = FALSE)
+ggmice::plot_corr(dat_imp[vars_analyse], label = TRUE, square = FALSE, rotate = TRUE)
+```
+
+
+## create methods
+```{r}
+meth_imp <- mice::make.method(dat_imp)
+vars_complete <- vars[colSums(is.na(dat_imp)) == 0]
+meth_imp[vars %in% vars_fixed & vars %nin% vars_complete] <- "2lonly.pmm" #constante variablen
+meth_imp[vars %in% vars_outcome] <- "2l.pmm"
+meth_imp[vars %in% vars_random] <- "pmm"
+#CHECK IF IMPS FOR VARS_FIXED REMAIN CONSTANT AFTER IMPUTATION. ELSE USE MODE AFTER IMP
+```
+
+---
+
+## create pred matrix
+```{r}
+pred_imp <- mice::quickpred(dat_imp, mincor = 0.1) #correlaties r >= 0.06
+plot_pred(pred_imp)
+# pred_imp[pred_imp == 1] <- 2 #vervang 1en door 2en vanwege conventies multilevelmodellen mice
+pred_imp[, vars_outcome] <- 2 #uitkomst analysemodel als predictor voor alle variabelen
+pred_imp[vars_outcome, ] <- 1 #alle variabelen als predictor voor uitkomst analysemodel
+pred_imp[vars_random, "meting_mnd"] <- 2 #meetmoment als voorspeller voor varierende variabelen
+pred_imp[vars_random, "meting_squared"] <- 2 #meetmoment als voorspeller voor varierende variabelen
+pred_imp[vars_complete, ] <- 0 #volledig geobserveerd, dus verwijderen
+pred_imp[, "id"] <- -2 #clustervariabele gespecificeerd in elk model
+diag(pred_imp) <- 0 #variabelen niet als predictor voor zichzelf
+plot_pred(pred_imp)
+```
+
+
+# impute the data
+```{r}
+imp <- mice(dat_imp, m = 5, maxit = 2, 
+            method = meth_imp, 
+            predictorMatrix = pred_imp, 
+            printFlag= FALSE, 
+            seed = 104, 
+            visitSequence = "monotone")
+imp_it <- mice.mids(imp, maxit = 10)
+saveRDS(imp_ruw, "imps.RDS")
+saveRDS(imp_it, "imps_12it.RDS")
+imp_it20 <- mice.mids(imp_it, maxit = 8)
+saveRDS(imp_it20, "imps_20it.RDS")
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
