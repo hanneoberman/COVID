@@ -1,0 +1,30 @@
+---
+title: "Imputatie COVID data"
+author: "Hanne Oberman"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(include = FALSE)
+# setup environment
+library(haven)
+library(readxl)
+library(tidyverse)
+library(mice)
+library(miceadds)
+library(ggmice)
+library(lme4)
+`%nin%` <- Negate(`%in%`)
+modus <- function(x) {
+  ux <- unique(x)
+  ux[which.max(tabulate(match(x, ux)))]
+}
+```
+
+# Data
+```{r}
+dat_raw <- read_sav(url("https://surfdrive.surf.nl/files/index.php/s/Ng6KkVRgxNQtKCM"))
+# https://surfdrive.surf.nl/files/index.php/f/11746447583
+```
+
