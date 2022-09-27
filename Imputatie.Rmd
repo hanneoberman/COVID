@@ -175,9 +175,9 @@ dat_clean[1:200,] %>%
   theme(legend.position = "none")
 
 # calculate mode for constant variables
-modi <- aggregate(dat_clean[, vars_fixed], by = list(id = dat_clean$id), FUN = modus)
-dat_fixed <- dat_clean[, vars %nin% vars_fixed] %>% 
-  full_join(modes, by = "id")
+modi <- aggregate(dat_clean[, c("id", vars_fixed)], by = list(id = dat_clean$id), FUN = modus)
+dat_modi <- dat_clean[, vars %nin% vars_fixed] %>% 
+  full_join(modi, by = "id")
 ```
 
 ---
