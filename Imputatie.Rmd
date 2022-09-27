@@ -163,7 +163,16 @@ dat_clean %<>%
   group_by(id) %>% 
   mutate(across(all_of(vars_fixed), ~ modus(.x))) %>% 
   ungroup()
+
 ### CHECK IF INCONSISTENCIES ARE GONE and if missings are preserved?
+dat_clean[1:200,] %>% 
+  ggplot(aes(x = meting_mnd, y = edu, color = as.factor(id))) +
+  geom_line() +
+  theme(legend.position = "none")
+
+# calculate mode for constant variables
+modi <- map(vars_fixed, ~{aggregate(dat_clean[[.x]], list(dat_clean$id), FUN=modus) %>% 
+    setNames(., c("id", .x))})
 ```
 
 ---
