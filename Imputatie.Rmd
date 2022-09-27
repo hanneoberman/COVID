@@ -60,9 +60,14 @@ library(magrittr)   # Pipes in R
 # Function for the mode of a vector
 modus <- function(x) {
   tally <- table(x, useNA = "no")
-  if(dim(tally)==0) {mode <- NA} else {mode <- which.max(tally)}
+  if(dim(tally)==0) {
+    mode <- NA
+    } else {
+      mode <- names(which.max(tally))
+      }
   return(mode)
 }
+
 modus_per_column <- function(x) {
   apply(x, 2, modus)
 }
@@ -163,21 +168,19 @@ vars <- names(dat_clean)
 
 ## impute fixed variables
 ```{r}
-dat_clean %<>% 
-  group_by(id) %>% 
-  mutate(across(all_of(vars_fixed), ~ modus(.x))) %>% 
-  ungroup()
-
-### CHECK IF INCONSISTENCIES ARE GONE and if missings are preserved?
-dat_clean[1:200,] %>% 
+# calculate mode for constant variables
+modi <- split(dat_clean[, c("id", vars_fixed)], factor(dat_clean$id)) %>% 
+  map_dfr(~modus_per_column(.x)) %>% 
+  mutate(across(everything(), ~as.numeric(.x)),
+         id = as.numeric(id))
+# combine constants with the time-varying data
+dat_modi <- dat_clean[, vars %nin% vars_fixed] %>% 
+  full_join(modi, by = "id")
+# check if the constants are in fact constant across measurements
+dat_modi[1:200,] %>% 
   ggplot(aes(x = meting_mnd, y = edu, color = as.factor(id))) +
   geom_line() +
   theme(legend.position = "none")
-
-# calculate mode for constant variables
-modi <- aggregate(dat_clean[, c("id", vars_fixed)], by = list(id = dat_clean$id), FUN = modus)
-dat_modi <- dat_clean[, vars %nin% vars_fixed] %>% 
-  full_join(modi, by = "id")
 ```
 
 ---
