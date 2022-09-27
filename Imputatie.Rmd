@@ -2,29 +2,85 @@
 title: "Imputatie COVID data"
 author: "Hanne Oberman"
 date: "`r Sys.Date()`"
-output: html_document
+output: 
+  html_document:
+    toc: true
+    toc_depth: 5
+    toc_float: true
+    number_sections: true
 ---
 
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(include = FALSE)
+<style type="text/css">
+
+body{ /* Normal  */
+      font-size: 12px;
+  }
+td {  /* Table  */
+  font-size: 12px;
+}
+h1.title {
+  font-size: 20px;
+  color: DarkBlue;
+}
+h1 { /* Header 1 */
+  font-size: 18px;
+}
+h2 { /* Header 2 */
+    font-size: 16px;
+}
+h3 { /* Header 3 */
+  font-size: 14px;
+}
+code.r{ /* Code block */
+    font-size: 12px;
+}
+pre { /* Code block - determines code spacing between lines */
+    font-size: 12px;
+}
+</style>
+
+---
+
+# Packages and functions used
+```{r setup, include=TRUE, message=FALSE, warning=TRUE}
 # setup environment
-library(haven)
-library(readxl)
-library(tidyverse)
-library(mice)
-library(miceadds)
-library(ggmice)
-library(lme4)
+library(haven)      # For importing SPSS data
+library(readxl)     # For reading excel files
+library(tidyverse)  # All things useful
+library(mice)       # For incomplete data analysis
+library(miceadds)   # Additions to mice
+library(ggmice)     # Plotting device for mice
+library(lme4)       # Linear mixed-effect modeling
+
+# Define function for `not in`
 `%nin%` <- Negate(`%in%`)
+
+# Function for the mode of a vector
 modus <- function(x) {
   ux <- unique(x)
   ux[which.max(tabulate(match(x, ux)))]
 }
 ```
 
-# Data
+---
+
+# Import the data
 ```{r}
-dat_raw <- read_sav(url("https://surfdrive.surf.nl/files/index.php/s/Ng6KkVRgxNQtKCM"))
-# https://surfdrive.surf.nl/files/index.php/f/11746447583
+dat_raw <- read_sav("data.zsav")
 ```
+
+---
+
+# Data editing
+
+---
+
+## Rename and clean labels
+```{r}
+dat_rename <- janitor::clean_names(dat_raw)
+vars <- names(dat_rename)
+```
+
+
+
 
