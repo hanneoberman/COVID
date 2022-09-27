@@ -59,8 +59,12 @@ library(magrittr)   # Pipes in R
 
 # Function for the mode of a vector
 modus <- function(x) {
-  ux <- unique(x)
-  ux[which.max(tabulate(match(x, ux)))]
+  tally <- table(x, useNA = "no")
+  if(dim(tally)==0) {mode <- NA} else {mode <- which.max(tally)}
+  return(mode)
+}
+modus_per_column <- function(x) {
+  apply(x, 2, modus)
 }
 ```
 
@@ -171,8 +175,9 @@ dat_clean[1:200,] %>%
   theme(legend.position = "none")
 
 # calculate mode for constant variables
-modi <- map(vars_fixed, ~{aggregate(dat_clean[[.x]], list(dat_clean$id), FUN=modus) %>% 
-    setNames(., c("id", .x))})
+modi <- aggregate(dat_clean[, vars_fixed], by = list(id = dat_clean$id), FUN = modus)
+dat_fixed <- dat_clean[, vars %nin% vars_fixed] %>% 
+  full_join(modes, by = "id")
 ```
 
 ---
