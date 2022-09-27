@@ -213,6 +213,7 @@ diag(pred_imp) <- 0 #variabelen niet als predictor voor zichzelf
 plot_pred(pred_imp)
 ```
 
+---
 
 # impute the data
 ```{r}
