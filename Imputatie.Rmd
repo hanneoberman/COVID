@@ -86,9 +86,12 @@ dat_raw <- read_sav("data.zsav")
 
 ---
 
-## Rename and clean labels
+## Rename and clean labels and attributes
 ```{r}
-dat_rename <- janitor::clean_names(dat_raw)
+# clean names
+dat_rename <- janitor::clean_names(dat_raw) 
+# strip attributes
+dat_rename[] <- lapply(dat_rename, as.vector)
 vars <- names(dat_rename)
 ```
 
@@ -120,17 +123,19 @@ dat_oesch$oesch <- mapvalues(dat_oesch$isco08,
 dat_clean <- dat_oesch %>% 
   zap_labels() %>% 
   select(-isco08, -weegfactor) %>% 
-  mutate(across(everything(), as.numeric),
-         oesch = na_if(oesch, 99),
+  mutate(oesch = na_if(oesch, 99),
          oesch = na_if(oesch, 110),
          oesch = na_if(oesch, 310),
          oesch = na_if(oesch, 4111),
-         oesch = na_if(oesch, 7536),
-         .after = meting) %>% 
-  rowwise() %>% 
-  mutate(q43 = mean(c(q43_wave1, q43_wave2tot5), na.rm = TRUE),
-         q43 = na_if(q43, "NaN"),
-         .keep = "unused")
+         oesch = na_if(oesch, 7536))
+```
+
+---
+
+## Combine health status question into a single variable
+```{r}
+dat_clean$q43 <- rowMeans(data.frame(dat_clean$q43_wave1, dat_clean$q43_wave2tot5), na.rm = TRUE)
+dat_clean[sapply(dat_clean, is.nan)] <- NA
 ```
 
 ---
@@ -187,8 +192,8 @@ dat_modi[1:200,] %>%
 
 ## select relevant variables
 ```{r}
+# from the cleaned data, select the analysis variables and covariates
 dat_imp <- dat_clean[c(vars_analyse, vars_covariates)]
-dat_imp[sapply(dat_imp, is.nan)] <- NA
 vars <- names(dat_imp)
 ```
 
