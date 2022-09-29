@@ -193,7 +193,7 @@ dat_modi[1:200,] %>%
 ## select relevant variables
 ```{r}
 # from the cleaned data, select the analysis variables and covariates
-dat_imp <- dat_clean[c(vars_analyse, vars_covariates)]
+dat_imp <- dat_modi[c(vars_analyse, vars_covariates)]
 vars <- names(dat_imp)
 ```
 
