@@ -241,8 +241,7 @@ plot_pred(pred_imp)
 # Impute the data
 
 Run a single iteration to check for errors
-```{r impute, eval=FALSE, include=TRUE}
-#TODO: @GERKO eval=FALSE verwijderen!
+```{r impute}
 imp <- mice(dat_imp, m = 10, maxit = 1, 
             method = meth_imp, 
             predictorMatrix = pred_imp, 
@@ -253,8 +252,7 @@ saveRDS(imp, "imp_1it.RDS")
 ```
 
 Add iterations for imputation algorithm convergence
-```{r impute2, eval=FALSE, include=TRUE}
-#TODO: @GERKO eval=FALSE verwijderen!
+```{r impute2}
 imp <- mice.mids(imp, maxit = 19)
 saveRDS(imp, "imp_20it.RDS")
 ```
