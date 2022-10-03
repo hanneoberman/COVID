@@ -77,7 +77,6 @@ modus_per_column <- function(x) {
 
 # Import the data
 ```{r data}
-setwd("C:/Users/4216318/surfdrive/Documents/COVID")
 dat_raw <- read_sav("data.zsav")
 ```
 

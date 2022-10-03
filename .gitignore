@@ -38,3 +38,5 @@ vignettes/*.pdf
 # R Environment Variables
 .Renviron
 data.zsav
+imp_1it.RDS
+imp_20it.RDS
