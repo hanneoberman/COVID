@@ -65,7 +65,7 @@ modus <- function(x) {
     } else {
       mode <- names(which.max(tally))
       }
-  return(mode)
+  return(as.numeric(mode))
 }
 
 modus_per_column <- function(x) {
@@ -77,7 +77,7 @@ modus_per_column <- function(x) {
 
 # Import the data
 ```{r data}
-dat_raw <- read_sav("data.zsav")
+dat_raw <- read_sav("data.zsav") %>% zap_labels()
 ```
 
 ---
