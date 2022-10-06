@@ -252,7 +252,7 @@ saveRDS(imp, "imp_1it.RDS")
 
 Add iterations for imputation algorithm convergence
 ```{r impute2}
-imp <- mice.mids(imp, maxit = 19)
+imp <- mice.mids(imp, maxit = 19, printFlag=FALSE)
 saveRDS(imp, "imp_20it.RDS")
 ```
 
