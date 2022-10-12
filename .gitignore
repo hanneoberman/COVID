@@ -40,3 +40,6 @@ vignettes/*.pdf
 data.zsav
 imp_1it.RDS
 imp_20it.RDS
+imputaties.RData
+vertrouwen.csv
+vertrouwen.RDS
