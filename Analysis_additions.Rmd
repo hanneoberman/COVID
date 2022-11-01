@@ -170,7 +170,7 @@ long_subset <- long %>%
 ## Convert back to imputation object
 ```{r cache = TRUE}
 imp_post <- as.mids(long_subset)
-save(imp_post, file = "./imputaties.RData")
+#save(imp_post, file = "./imputaties.RData")
 ```
 
 ---
@@ -179,13 +179,15 @@ save(imp_post, file = "./imputaties.RData")
 
 ---
 
-## Model with Time
+## Analysis 1: Model with Time
 ```{r cache = TRUE}
 fit <- imp_post %>% 
   complete("all") %>% 
   map(~.x %$% lme4::lmer(q60_1 ~ meting_mnd +  (1|id))) 
 # First imputed set
-fit[[1]]
+fit[[1]] %>% summary() %>% print(correlation = TRUE)
+# Summary AIC
+fit %>% map(~.x %>% AIC()) %>% unlist() %>% summary()
 # Pooled imputations
 fit %>% 
   pool() %>% 
@@ -198,13 +200,15 @@ results_vert
 ---
 
 
-## Model with time-independent predictors added
+## Analysis 2: Model with time-independent predictors added
 ```{r cache = TRUE}
 fit <- imp_post %>% 
   complete("all") %>% 
   map(~.x %$% lme4::lmer(q60_1 ~ meting_mnd + oesch + age + sekse + etn_herkomst + edu + huis + (1|id))) 
 # First imputed set
-fit[[1]]
+fit[[1]] %>% summary() %>% print(correlation = TRUE)
+# Summary AIC
+fit %>% map(~.x %>% AIC()) %>% unlist() %>% summary()
 # Pooled imputations
 fit %>% 
   pool() %>% 
@@ -215,13 +219,15 @@ results_vert
 
 ---
 
-## Model with time-dependent predictors added
+## Analysis 3: Model with time-dependent predictors added
 ```{r cache = TRUE}
 fit <- imp_post %>% 
   complete("all") %>% 
   map(~.x %$% lme4::lmer(q60_1 ~ meting_mnd + age + sekse + etn_herkomst + edu + huis + (1|id) + gezo + rond + medi + hulp + eenz + cont + drei + onvr + econ + ment)) 
 # First imputed set
-fit[[1]]
+fit[[1]] %>% summary() %>% print(correlation = TRUE)
+# Summary AIC
+fit %>% map(~.x %>% AIC()) %>% unlist() %>% summary()
 # Pooled imputations
 fit %>% 
   pool() %>% 
@@ -232,13 +238,15 @@ results_vert
 
 ---
 
-## Model with random effects for time added
+## Analysis 4: Model with random effects for time added
 ```{r cache = TRUE}
 fit <- imp_post %>% 
   complete("all") %>% 
   map(~.x %$% lme4::lmer(q60_1 ~ meting_mnd + age + sekse + etn_herkomst + edu + huis + (1 + meting_mnd | id) + gezo + rond + medi + hulp + eenz + cont + drei + onvr + econ + ment)) 
 # First imputed set
-fit[[1]]
+fit[[1]] %>% summary() %>% print(correlation = TRUE)
+# Summary AIC
+fit %>% map(~.x %>% AIC()) %>% unlist() %>% summary()
 # Pooled imputations
 fit %>% 
   pool() %>% 
@@ -249,7 +257,7 @@ results_vert
 
 ---
 
-## Rerun the analysis with only the time-dependent deviations without random effect for `meting_mnd`
+## Analysis 5: Rerun the analysis with only the time-dependent deviations without random effect for `meting_mnd`
 ```{r cache = TRUE}
 fit <- imp_post %>% 
   complete("all") %>% 
@@ -278,7 +286,9 @@ fit <- imp_post %>%
         ungroup(meting_mnd) %$% 
         lme4::lmer(q60_1 ~ meting_mnd + age + sekse + etn_herkomst + edu + huis + (1 | id) + gezo_dev + rond_dev + medi_dev + hulp_dev + eenz_dev + cont_dev + drei_dev + onvr_dev + econ_dev + ment_dev)) 
 # First imputed set
-fit[[1]]
+fit[[1]] %>% summary() %>% print(correlation = TRUE)
+# Summary AIC
+fit %>% map(~.x %>% AIC()) %>% unlist() %>% summary()
 # Pooled imputations
 fit %>% 
   pool() %>% 
@@ -289,7 +299,7 @@ results_vert
 
 ---
 
-## Rerun the analysis with only the time-dependent deviations
+## Analysis 6: Rerun the analysis with only the time-dependent deviations
 ```{r cache = TRUE}
 fit <- imp_post %>% 
   complete("all") %>% 
@@ -318,7 +328,9 @@ fit <- imp_post %>%
         ungroup(meting_mnd) %$% 
         lme4::lmer(q60_1 ~ meting_mnd + age + sekse + etn_herkomst + edu + huis + (1 + meting_mnd | id) + gezo_dev + rond_dev + medi_dev + hulp_dev + eenz_dev + cont_dev + drei_dev + onvr_dev + econ_dev + ment_dev)) 
 # First imputed set
-fit[[1]]
+fit[[1]] %>% summary() %>% print(correlation = TRUE)
+# Summary AIC
+fit %>% map(~.x %>% AIC()) %>% unlist() %>% summary()
 # Pooled imputations
 fit %>% 
   pool() %>% 
@@ -334,14 +346,18 @@ Random effect for time is not significant
 
 # Additional  analysis 
 
-## Model with random effects for time added
+---
+
+## Analysis 7: Model with random effects for time added
 But now  while enforcing a zero correlation between the intercept deviations and `meting_mnd` effect deviations across levels of `id`.
 ```{r cache = TRUE}
 fit <- imp_post %>% 
   complete("all") %>% 
-  map(~.x %$% lme4::lmer(q60_1 ~ meting_mnd + age + sekse + etn_herkomst + edu + huis + (1 + meting_mnd | id) + gezo + rond + medi + hulp + eenz + cont + drei + onvr + econ + ment)) 
+  map(~.x %$% lme4::lmer(q60_1 ~ (1 | id) +  meting_mnd + (0 + meting_mnd | id) + age + sekse + etn_herkomst + edu + huis + gezo + rond + medi + hulp + eenz + cont + drei + onvr + econ + ment)) 
 # First imputed set
-fit[[1]]
+fit[[1]] %>% summary() %>% print(correlation = TRUE)
+# Summary AIC
+fit %>% map(~.x %>% AIC()) %>% unlist() %>% summary()
 # Pooled imputations
 fit %>% 
   pool() %>% 
@@ -350,4 +366,144 @@ results_vert <- mitml::testEstimates(as.mitml.result(fit), extra.pars = TRUE)
 results_vert
 ```
 
-## Q
+---
+
+## How is time coded
+```{r}
+imp_post$data$meting_mnd %>% table()
+```
+
+---
+
+## Do time-dependent predictors have mean zero per time? 
+For Analysis 3: NO
+```{r}
+imp_post %>% 
+  complete("all") %>% 
+  map(~.x %>% 
+        select(meting_mnd, gezo, rond, medi, hulp, eenz, cont, drei, onvr, econ, ment) %>% 
+        group_by(meting_mnd) %>% 
+        summarise_all(.funs = mean)) %>% 
+  Reduce("+", .) / imp_post$m
+```
+As per Analysis 5, Analysis 6 and Analysis 7, the deviations sums to 0
+```{r}
+imp_post %>% 
+complete("all") %>% 
+  map(~.x %>% 
+        group_by(meting_mnd) %>% 
+        mutate(gezo_mean = mean(gezo, na.rm = TRUE), 
+               gezo_dev = gezo - gezo_mean,
+               rond_mean = mean(rond, na.rm = TRUE), 
+               rond_dev = rond - rond_mean,
+               medi_mean = mean(medi, na.rm = TRUE), 
+               medi_dev = medi - medi_mean,
+               hulp_mean = mean(hulp, na.rm = TRUE), 
+               hulp_dev = hulp - hulp_mean,
+               eenz_mean = mean(eenz, na.rm = TRUE), 
+               eenz_dev = eenz - eenz_mean,
+               cont_mean = mean(cont, na.rm = TRUE), 
+               cont_dev = cont - cont_mean,
+               drei_mean = mean(drei, na.rm = TRUE), 
+               drei_dev = drei - drei_mean,
+               onvr_mean = mean(onvr, na.rm = TRUE), 
+               onvr_dev = onvr - onvr_mean,
+               econ_mean = mean(econ, na.rm = TRUE), 
+               econ_dev = econ - econ_mean,
+               ment_mean = mean(ment, na.rm = TRUE), 
+               ment_dev = ment - ment_mean) %>% 
+        select(meting_mnd, gezo_dev, rond_dev, medi_dev, hulp_dev, eenz_dev, cont_dev, drei_dev, onvr_dev, econ_dev, ment_dev) %>% 
+  summarise_all(.funs = mean) %>% round(5)) %>% 
+  Reduce("+", .) / imp_post$m
+```
+The means should be identical to those under Analysis 3
+```{r}
+imp_post %>% 
+complete("all") %>% 
+  map(~.x %>% 
+        group_by(meting_mnd) %>% 
+        mutate(gezo_mean = mean(gezo, na.rm = TRUE), 
+               gezo_dev = gezo - gezo_mean,
+               rond_mean = mean(rond, na.rm = TRUE), 
+               rond_dev = rond - rond_mean,
+               medi_mean = mean(medi, na.rm = TRUE), 
+               medi_dev = medi - medi_mean,
+               hulp_mean = mean(hulp, na.rm = TRUE), 
+               hulp_dev = hulp - hulp_mean,
+               eenz_mean = mean(eenz, na.rm = TRUE), 
+               eenz_dev = eenz - eenz_mean,
+               cont_mean = mean(cont, na.rm = TRUE), 
+               cont_dev = cont - cont_mean,
+               drei_mean = mean(drei, na.rm = TRUE), 
+               drei_dev = drei - drei_mean,
+               onvr_mean = mean(onvr, na.rm = TRUE), 
+               onvr_dev = onvr - onvr_mean,
+               econ_mean = mean(econ, na.rm = TRUE), 
+               econ_dev = econ - econ_mean,
+               ment_mean = mean(ment, na.rm = TRUE), 
+               ment_dev = ment - ment_mean) %>% 
+        select(meting_mnd, gezo_mean, rond_mean, medi_mean, hulp_mean, eenz_mean, cont_mean, drei_mean, onvr_mean, econ_mean, ment_mean) %>% 
+  summarise_all(.funs = mean)) %>% 
+  Reduce("+", .) / imp_post$m
+```
+
+---
+
+## What about further (re)scaling because of non-convergence
+Does not do much, in my opinion, as the correlations between the fixed effects are not large.
+```{r}
+fit[[1]] %>% summary() %>% print(correlation = TRUE)
+```
+
+---
+
+## Correlations between vertrouwen (`q60_1`) and the calculated means per measurement occasion
+No correlation for `econ`, as the means over time are constant. 
+```{r}
+Means <- imp_post %>% 
+  complete("all") %>% 
+  map(~.x %>% 
+        group_by(meting_mnd) %>% 
+        mutate(gezo_mean = mean(gezo, na.rm = TRUE), 
+               gezo_dev = gezo - gezo_mean,
+               rond_mean = mean(rond, na.rm = TRUE), 
+               rond_dev = rond - rond_mean,
+               medi_mean = mean(medi, na.rm = TRUE), 
+               medi_dev = medi - medi_mean,
+               hulp_mean = mean(hulp, na.rm = TRUE), 
+               hulp_dev = hulp - hulp_mean,
+               eenz_mean = mean(eenz, na.rm = TRUE), 
+               eenz_dev = eenz - eenz_mean,
+               cont_mean = mean(cont, na.rm = TRUE), 
+               cont_dev = cont - cont_mean,
+               drei_mean = mean(drei, na.rm = TRUE), 
+               drei_dev = drei - drei_mean,
+               onvr_mean = mean(onvr, na.rm = TRUE), 
+               onvr_dev = onvr - onvr_mean,
+               econ_mean = mean(econ, na.rm = TRUE), 
+               econ_dev = econ - econ_mean,
+               ment_mean = mean(ment, na.rm = TRUE), 
+               ment_dev = ment - ment_mean) %>% 
+        select(q60_1, meting_mnd, gezo_mean, rond_mean, medi_mean, hulp_mean, eenz_mean, 
+               cont_mean, drei_mean, onvr_mean, econ_mean, ment_mean) %>% 
+        summarise_all(.funs = mean)) %>% 
+  Reduce("+", .) / imp_post$m
+Means
+cor(Means)
+```
+
+### Check if econ is constant
+```{r}
+imp_post %>% 
+  complete("all") %>% 
+  map(~.x %>% select(econ, meting_mnd) %>% group_by(meting_mnd) %>% summarise_all(.funs = mean)) %>% 
+  Reduce("+", .) / imp_post$m
+
+```
+### Verify with different calculation method
+```{r}
+imp_post %>% complete("all") %>% 
+  map(~.x %>% aggregate(econ ~ meting_mnd, data = ., FUN = mean)) %>% 
+  Reduce("+", .) / imp_post$m
+```
+
