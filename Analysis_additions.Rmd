@@ -194,6 +194,9 @@ fit %>%
   broom.mixed::tidy()
 results_vert <- mitml::testEstimates(as.mitml.result(fit), extra.pars = TRUE)
 results_vert
+
+# report
+results_vert[["estimates"]][,c(1, 2, 5)] %>% signif(., 3) 
 ```
 
 
@@ -204,7 +207,7 @@ results_vert
 ```{r cache = TRUE}
 fit <- imp_post %>% 
   complete("all") %>% 
-  map(~.x %$% lme4::lmer(q60_1 ~ meting_mnd + oesch + age + sekse + etn_herkomst + edu + huis + (1|id))) 
+  map(~.x %$% lme4::lmer(q60_1 ~ meting_mnd + age + sekse + etn_herkomst + edu + huis + (1|id))) 
 # First imputed set
 fit[[1]] %>% summary() %>% print(correlation = TRUE)
 # Summary AIC
@@ -215,6 +218,9 @@ fit %>%
   broom.mixed::tidy()
 results_vert <- mitml::testEstimates(as.mitml.result(fit), extra.pars = TRUE)
 results_vert
+
+# report
+results_vert[["estimates"]][,c(1, 2, 5)] %>% signif(., 3) 
 ```
 
 ---
