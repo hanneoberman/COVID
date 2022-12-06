@@ -1,0 +1,273 @@
+---
+title: "Imputatie COVID data"
+author: "Hanne Oberman"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    toc: true
+    toc_depth: 5
+    toc_float: true
+    number_sections: true
+---
+
+<style type="text/css">
+
+body{ /* Normal  */
+      font-size: 12px;
+  }
+td {  /* Table  */
+  font-size: 12px;
+}
+h1.title {
+  font-size: 20px;
+  color: DarkBlue;
+}
+h1 { /* Header 1 */
+  font-size: 18px;
+}
+h2 { /* Header 2 */
+    font-size: 16px;
+}
+h3 { /* Header 3 */
+  font-size: 14px;
+}
+code.r{ /* Code block */
+    font-size: 12px;
+}
+pre { /* Code block - determines code spacing between lines */
+    font-size: 12px;
+}
+</style>
+
+---
+
+# Packages and functions used
+```{r setup, include=TRUE, message=FALSE, warning=TRUE}
+# setup environment
+library(haven)      # For importing SPSS data
+library(readxl)     # For reading excel files
+library(tidyverse)  # All things useful
+library(mice)       # For incomplete data analysis
+library(miceadds)   # Additions to mice
+library(ggmice)     # Plotting device for mice
+library(lme4)       # Linear mixed-effect modeling
+library(plyr)       # Data wrangling
+library(magrittr)   # Pipes in R
+
+# Define function for `not in`
+`%nin%` <- Negate(`%in%`)
+
+# Function for the mode of a vector
+modus <- function(x) {
+  tally <- table(x, useNA = "no")
+  if(dim(tally)==0) {
+    mode <- NA
+    } else {
+      mode <- names(which.max(tally))
+      }
+  return(as.numeric(mode))
+}
+
+modus_per_column <- function(x) {
+  apply(x, 2, modus)
+}
+```
+
+---
+
+# Import the data
+```{r data}
+dat_raw <- read_sav("data_correctlycoded_GV.zsav") %>% zap_labels()
+```
+
+---
+
+# Data editing
+
+---
+
+## Rename and clean labels and attributes
+```{r clean}
+# clean names
+dat_rename <- janitor::clean_names(dat_raw) 
+# strip attributes
+dat_rename[] <- lapply(dat_rename, as.vector)
+vars <- names(dat_rename)
+```
+
+---
+
+## Make time dimension consistent and add polynomial for measurement occasion
+The following step adds non-observed measurement occasions when participants do not have all measurement occasions observed. 
+```{r time}
+dat_meting <- expand.grid(id = unique(dat_rename$id), meting = 1:5)
+dat_long <- full_join(dat_rename, dat_meting)
+```
+
+The following step recodes the measurement occasions into months and adds a quadratic term 
+```{r time2}
+dat_long %<>%
+  mutate(meting_mnd = recode_factor(meting, 
+                                    `1` = "0", 
+                                    `2` = "3", 
+                                    `3` = "7", 
+                                    `4` = "12", 
+                                    `5` = "17") %>% 
+           as.character() %>% as.numeric(),
+         meting_squared = meting_mnd * meting_mnd)
+```
+
+---
+
+## Add the occupation of participants
+
+First recode `isco` to `oesch`
+```{r work}
+oesch <- read_excel("oesch.xlsx")
+dat_oesch <- dat_long %>% 
+  mutate(isco08 = as.character(isco08))
+dat_oesch$oesch <- mapvalues(dat_oesch$isco08, 
+                             from = oesch$ISCO, 
+                             to = oesch$OESCH)
+```
+
+Then clean the `oesch` codes and make the empty cells for occupation explicitly NA
+```{r work2}
+dat_clean <- dat_oesch %>% 
+  zap_labels() %>% 
+  select(-isco08, -weegfactor) %>% 
+  mutate(oesch = na_if(oesch, 99),
+         oesch = na_if(oesch, 110),
+         oesch = na_if(oesch, 310),
+         oesch = na_if(oesch, 4111),
+         oesch = na_if(oesch, 7536))
+dat_clean$oesch[dat_clean$oesch == ""] <- NA
+```
+
+---
+
+## Combine health status question into a single variable
+```{r health}
+dat_clean$q43 <- rowMeans(data.frame(dat_clean$q43_wave1, dat_clean$q43_wave2tot5), na.rm = TRUE)
+dat_clean[sapply(dat_clean, is.nan)] <- NA
+```
+
+---
+
+## Select relevant variables
+
+Create variable vectors for imputation models
+```{r variables}
+vars_outcome <- c("q60_1", "q49_1", "q49_2", "q49_3", "q49_4", "q49_5", "q49_6")
+vars_fixed <- c("edu", "oesch", "geboortejaar", "q29", "q52", "q53", "q54", "sekse", "etn_herkomst")
+vars_random <- c("meting_mnd", "meting_squared", "q43", "q48_1", "q48_9", "q48_10", "q48_11", "q48_12", "q47_1", "q47_2", "q47_3", "q33_1", "q33_2", "q33_3", "q33_4", "q33_5", "q33_6")
+vars_covariates <- c("q34_1", "q34_2", "q34_3", "q34_4", "q34_5", "q38_1", "q38_2", "q38_3", "q38_4", "q31_1", "q31_2", "q31_3", "q31_4", "q31_5", "q31_6", "q31_7", "q59", "q60_2", "q60_3", "q60_4", "q60_8", "q60_10", "q60_12")
+vars_analyse <- c("id", vars_outcome, vars_fixed, vars_random)
+```
+
+Filter the relevant variables
+```{r filter}
+# from the cleaned data, select the analysis variables and covariates
+dat_clean <- dat_clean[c(vars_analyse, vars_covariates)]
+vars <- names(dat_clean)
+```
+
+---
+
+# Imputation
+
+---
+
+## Impute fixed variables
+The following code takes the most frequent observation per participant across measurement occasions for variables that are assumed constant in the analysis model, and fills this value in for all measurement occasions 
+```{r constants}
+# calculate mode for constant variables
+modi <- split(dat_clean[, c("id", vars_fixed)], factor(dat_clean$id)) %>% 
+  map_dfr(~modus_per_column(.x)) %>% 
+  mutate(across(everything(), ~as.numeric(.x)),
+         id = as.numeric(id))
+# combine constants with the time-varying data
+dat_imp <- dat_clean[, vars %nin% vars_fixed] %>% 
+  left_join(modi, by = "id")
+# check if the constants are in fact constant across measurements
+dat_imp[1:200,] %>% 
+  ggplot(aes(x = meting_mnd, y = edu, color = as.factor(id))) +
+  geom_line() +
+  theme(legend.position = "none")
+```
+
+---
+
+## Develop imputation models
+The minimum correlation between (incomplete) variables for inclusion in the imputation models is set to r = 0.1. The outcome variables (trust in the government and mental health during COVID) are imputed using multilevel predictive mean matching. The time-varying predictor variables and covariates are imputed using the so-called 'indicator method'. Variables that are assumed constant across measurement occasions in the analysis model (e.g. ethnicity) are imputed using cluster-level predictive mean matching.
+
+First inspect missingness pattern and correlations
+```{r plot}
+md.pattern(dat_imp[vars_fixed], rotate.names = TRUE)
+md.pattern(dat_imp[vars_outcome], rotate.names = TRUE)
+md.pattern(dat_imp[vars_random], rotate.names = TRUE, plot = FALSE)
+ggmice::plot_corr(dat_imp[vars_analyse], label = TRUE, square = FALSE, rotate = TRUE)
+```
+
+Then create vector of imputation methods
+```{r methods}
+vars <- names(dat_imp)
+vars_complete <- vars[colSums(is.na(dat_imp)) == 0]
+meth_imp <- mice::make.method(dat_imp)
+meth_imp[vars %in% vars_fixed & vars %nin% vars_complete] <- "2lonly.pmm" #constante variablen
+meth_imp[vars %in% vars_outcome] <- "2l.pmm"
+meth_imp[vars %in% vars_random] <- "pmm"
+#CHECK IF IMPS FOR VARS_FIXED REMAIN CONSTANT AFTER IMPUTATION. ELSE USE MODE AFTER IMP
+```
+
+And create predictor matrix for the imputation models
+```{r pred}
+pred_imp <- mice::quickpred(dat_imp, mincor = 0.1) #correlaties r >= 0.06
+plot_pred(pred_imp)
+# pred_imp[pred_imp == 1] <- 2 #vervang 1en door 2en vanwege conventies multilevelmodellen mice
+pred_imp[, vars_outcome] <- 2 #uitkomst analysemodel als predictor voor alle variabelen
+pred_imp[vars_outcome, ] <- 1 #alle variabelen als predictor voor uitkomst analysemodel
+pred_imp[vars_random, "meting_mnd"] <- 2 #meetmoment als voorspeller voor varierende variabelen
+pred_imp[vars_random, "meting_squared"] <- 2 #meetmoment als voorspeller voor varierende variabelen
+pred_imp[vars_complete, ] <- 0 #volledig geobserveerd, dus verwijderen
+pred_imp[, "id"] <- -2 #clustervariabele gespecificeerd in elk model
+diag(pred_imp) <- 0 #variabelen niet als predictor voor zichzelf
+plot_pred(pred_imp)
+```
+
+---
+
+# Impute the data
+
+Run a single iteration to check for errors
+```{r impute}
+imp <- mice(dat_imp, m = 10, maxit = 1, 
+            method = meth_imp, 
+            predictorMatrix = pred_imp, 
+            printFlag= FALSE, 
+            seed = 104,
+            visitSequence = "monotone")
+saveRDS(imp, "imp_1it.RDS")
+```
+
+Add iterations for imputation algorithm convergence
+```{r impute2}
+imp <- mice.mids(imp, maxit = 19, printFlag=FALSE)
+saveRDS(imp, "imp_20it.RDS")
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
