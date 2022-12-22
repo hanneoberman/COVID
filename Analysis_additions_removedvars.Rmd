@@ -114,14 +114,8 @@ levels(long$etn_herkomst)<- c("Nederlandse achtergrond",
 ## Combine items of scale contructs into variables
 ```{r cache = TRUE}
 long <- long %>% 
-  mutate(ment = rowMeans(select(., q49_1, q49_2, q49_3, q49_4, q49_5, q49_6), na.rm=TRUE), #mentale gevolgen
-         econ = rowMeans(select(., q52, q53, q54), na.rm=TRUE),  #economische
-         onvr = rowMeans(select(., q48_1, q48_9, q48_10,  q48_11, q48_12), na.rm=TRUE), #onvrede met beleid
+  mutate(onvr = rowMeans(select(., q48_1, q48_9, q48_10,  q48_11, q48_12), na.rm=TRUE), #onvrede met beleid
          drei = rowMeans(select(., q47_1, q47_2, q47_3), na.rm=TRUE), #dreiging ervaren
-         cont = rowMeans(select(., q33_1, q33_2, q33_3,  q33_4, q33_5, q33_6), na.rm=TRUE),  #sociaal contact
-         eenz = rowMeans(select(., q34_1, q34_2, q34_3,  q34_4, q34_5), na.rm=TRUE), #eenzaamheid
-         hulp = rowMeans(select(., q38_1, q38_2, q38_3,  q38_4), na.rm=TRUE), #hulp ontvangen
-         medi = rowMeans(select(., q31_1, q31_2, q31_3,  q31_4, q31_5, q31_6, q31_7), na.rm=TRUE), #mediagebruik
          rond = q59, #rondkomen
          gezo = q43,
          huis = q29) #gezondheid
@@ -151,14 +145,8 @@ long_subset <- long %>%
          age, 
          sekse, 
          etn_herkomst, 
-         ment, 
-         econ, 
          onvr, 
          drei, 
-         cont, 
-         eenz, 
-         hulp, 
-         medi, 
          rond, 
          gezo,
          q60_1,
@@ -170,7 +158,7 @@ long_subset <- long %>%
 ## Convert back to imputation object
 ```{r cache = TRUE}
 imp_post <- as.mids(long_subset)
-# save(imp_post, file = "./imputaties.RData")
+#save(imp_post, file = "./imputaties.RData")
 ```
 
 ---
@@ -194,6 +182,9 @@ fit %>%
   broom.mixed::tidy()
 results_vert <- mitml::testEstimates(as.mitml.result(fit), extra.pars = TRUE)
 results_vert
+
+# report
+results_vert[["estimates"]][,c(1, 2, 5)] %>% signif(., 3) 
 ```
 
 
@@ -204,7 +195,7 @@ results_vert
 ```{r cache = TRUE}
 fit <- imp_post %>% 
   complete("all") %>% 
-  map(~.x %$% lme4::lmer(q60_1 ~ meting_mnd + oesch + age + sekse + etn_herkomst + edu + huis + (1|id))) 
+  map(~.x %$% lme4::lmer(q60_1 ~ meting_mnd + age + sekse + etn_herkomst + edu + huis + (1|id))) 
 # First imputed set
 fit[[1]] %>% summary() %>% print(correlation = TRUE)
 # Summary AIC
@@ -215,6 +206,9 @@ fit %>%
   broom.mixed::tidy()
 results_vert <- mitml::testEstimates(as.mitml.result(fit), extra.pars = TRUE)
 results_vert
+
+# report
+results_vert[["estimates"]][,c(1, 2, 5)] %>% signif(., 3) 
 ```
 
 ---
@@ -223,7 +217,7 @@ results_vert
 ```{r cache = TRUE}
 fit <- imp_post %>% 
   complete("all") %>% 
-  map(~.x %$% lme4::lmer(q60_1 ~ meting_mnd + age + sekse + etn_herkomst + edu + huis + (1|id) + gezo + rond + medi + hulp + eenz + cont + drei + onvr + econ + ment)) 
+  map(~.x %$% lme4::lmer(q60_1 ~ meting_mnd + age + sekse + etn_herkomst + edu + huis + (1|id) + gezo + rond + drei + onvr)) 
 # First imputed set
 fit[[1]] %>% summary() %>% print(correlation = TRUE)
 # Summary AIC
@@ -242,7 +236,7 @@ results_vert
 ```{r cache = TRUE}
 fit <- imp_post %>% 
   complete("all") %>% 
-  map(~.x %$% lme4::lmer(q60_1 ~ meting_mnd + age + sekse + etn_herkomst + edu + huis + (1 + meting_mnd | id) + gezo + rond + medi + hulp + eenz + cont + drei + onvr + econ + ment)) 
+  map(~.x %$% lme4::lmer(q60_1 ~ meting_mnd + age + sekse + etn_herkomst + edu + huis + (1 + meting_mnd | id) + gezo + rond  + drei + onvr)) 
 # First imputed set
 fit[[1]] %>% summary() %>% print(correlation = TRUE)
 # Summary AIC
@@ -267,24 +261,12 @@ fit <- imp_post %>%
                gezo_dev = gezo - gezo_mean,
                rond_mean = mean(rond, na.rm = TRUE), 
                rond_dev = rond - rond_mean,
-               medi_mean = mean(medi, na.rm = TRUE), 
-               medi_dev = medi - medi_mean,
-               hulp_mean = mean(hulp, na.rm = TRUE), 
-               hulp_dev = hulp - hulp_mean,
-               eenz_mean = mean(eenz, na.rm = TRUE), 
-               eenz_dev = eenz - eenz_mean,
-               cont_mean = mean(cont, na.rm = TRUE), 
-               cont_dev = cont - cont_mean,
                drei_mean = mean(drei, na.rm = TRUE), 
                drei_dev = drei - drei_mean,
                onvr_mean = mean(onvr, na.rm = TRUE), 
-               onvr_dev = onvr - onvr_mean,
-               econ_mean = mean(econ, na.rm = TRUE), 
-               econ_dev = econ - econ_mean,
-               ment_mean = mean(ment, na.rm = TRUE), 
-               ment_dev = ment - ment_mean) %>% 
+               onvr_dev = onvr - onvr_mean) %>% 
         ungroup(meting_mnd) %$% 
-        lme4::lmer(q60_1 ~ meting_mnd + age + sekse + etn_herkomst + edu + huis + (1 | id) + gezo_dev + rond_dev + medi_dev + hulp_dev + eenz_dev + cont_dev + drei_dev + onvr_dev + econ_dev + ment_dev)) 
+        lme4::lmer(q60_1 ~ meting_mnd + age + sekse + etn_herkomst + edu + huis + (1 | id) + gezo_dev + rond_dev + drei_dev + onvr_dev)) 
 # First imputed set
 fit[[1]] %>% summary() %>% print(correlation = TRUE)
 # Summary AIC
@@ -309,24 +291,12 @@ fit <- imp_post %>%
                gezo_dev = gezo - gezo_mean,
                rond_mean = mean(rond, na.rm = TRUE), 
                rond_dev = rond - rond_mean,
-               medi_mean = mean(medi, na.rm = TRUE), 
-               medi_dev = medi - medi_mean,
-               hulp_mean = mean(hulp, na.rm = TRUE), 
-               hulp_dev = hulp - hulp_mean,
-               eenz_mean = mean(eenz, na.rm = TRUE), 
-               eenz_dev = eenz - eenz_mean,
-               cont_mean = mean(cont, na.rm = TRUE), 
-               cont_dev = cont - cont_mean,
                drei_mean = mean(drei, na.rm = TRUE), 
                drei_dev = drei - drei_mean,
                onvr_mean = mean(onvr, na.rm = TRUE), 
-               onvr_dev = onvr - onvr_mean,
-               econ_mean = mean(econ, na.rm = TRUE), 
-               econ_dev = econ - econ_mean,
-               ment_mean = mean(ment, na.rm = TRUE), 
-               ment_dev = ment - ment_mean) %>% 
+               onvr_dev = onvr - onvr_mean) %>% 
         ungroup(meting_mnd) %$% 
-        lme4::lmer(q60_1 ~ meting_mnd + age + sekse + etn_herkomst + edu + huis + (1 + meting_mnd | id) + gezo_dev + rond_dev + medi_dev + hulp_dev + eenz_dev + cont_dev + drei_dev + onvr_dev + econ_dev + ment_dev)) 
+        lme4::lmer(q60_1 ~ meting_mnd + age + sekse + etn_herkomst + edu + huis + (1 + meting_mnd | id) + gezo_dev + rond_dev + drei_dev + onvr_dev)) 
 # First imputed set
 fit[[1]] %>% summary() %>% print(correlation = TRUE)
 # Summary AIC
@@ -353,7 +323,7 @@ But now  while enforcing a zero correlation between the intercept deviations and
 ```{r cache = TRUE}
 fit <- imp_post %>% 
   complete("all") %>% 
-  map(~.x %$% lme4::lmer(q60_1 ~ (1 | id) +  meting_mnd + (0 + meting_mnd | id) + age + sekse + etn_herkomst + edu + huis + gezo + rond + medi + hulp + eenz + cont + drei + onvr + econ + ment)) 
+  map(~.x %$% lme4::lmer(q60_1 ~ (1 | id) +  meting_mnd + (0 + meting_mnd | id) + age + sekse + etn_herkomst + edu + huis + gezo + rond + drei + onvr)) 
 # First imputed set
 fit[[1]] %>% summary() %>% print(correlation = TRUE)
 # Summary AIC
@@ -381,7 +351,7 @@ For Analysis 3: NO
 imp_post %>% 
   complete("all") %>% 
   map(~.x %>% 
-        select(meting_mnd, gezo, rond, medi, hulp, eenz, cont, drei, onvr, econ, ment) %>% 
+        select(meting_mnd, gezo, rond, drei, onvr) %>% 
         group_by(meting_mnd) %>% 
         summarise_all(.funs = mean)) %>% 
   Reduce("+", .) / imp_post$m
@@ -396,23 +366,11 @@ complete("all") %>%
                gezo_dev = gezo - gezo_mean,
                rond_mean = mean(rond, na.rm = TRUE), 
                rond_dev = rond - rond_mean,
-               medi_mean = mean(medi, na.rm = TRUE), 
-               medi_dev = medi - medi_mean,
-               hulp_mean = mean(hulp, na.rm = TRUE), 
-               hulp_dev = hulp - hulp_mean,
-               eenz_mean = mean(eenz, na.rm = TRUE), 
-               eenz_dev = eenz - eenz_mean,
-               cont_mean = mean(cont, na.rm = TRUE), 
-               cont_dev = cont - cont_mean,
                drei_mean = mean(drei, na.rm = TRUE), 
                drei_dev = drei - drei_mean,
                onvr_mean = mean(onvr, na.rm = TRUE), 
-               onvr_dev = onvr - onvr_mean,
-               econ_mean = mean(econ, na.rm = TRUE), 
-               econ_dev = econ - econ_mean,
-               ment_mean = mean(ment, na.rm = TRUE), 
-               ment_dev = ment - ment_mean) %>% 
-        select(meting_mnd, gezo_dev, rond_dev, medi_dev, hulp_dev, eenz_dev, cont_dev, drei_dev, onvr_dev, econ_dev, ment_dev) %>% 
+               onvr_dev = onvr - onvr_mean) %>% 
+        select(meting_mnd, gezo_dev, rond_dev, drei_dev, onvr_dev) %>% 
   summarise_all(.funs = mean) %>% round(5)) %>% 
   Reduce("+", .) / imp_post$m
 ```
@@ -426,23 +384,11 @@ complete("all") %>%
                gezo_dev = gezo - gezo_mean,
                rond_mean = mean(rond, na.rm = TRUE), 
                rond_dev = rond - rond_mean,
-               medi_mean = mean(medi, na.rm = TRUE), 
-               medi_dev = medi - medi_mean,
-               hulp_mean = mean(hulp, na.rm = TRUE), 
-               hulp_dev = hulp - hulp_mean,
-               eenz_mean = mean(eenz, na.rm = TRUE), 
-               eenz_dev = eenz - eenz_mean,
-               cont_mean = mean(cont, na.rm = TRUE), 
-               cont_dev = cont - cont_mean,
                drei_mean = mean(drei, na.rm = TRUE), 
                drei_dev = drei - drei_mean,
                onvr_mean = mean(onvr, na.rm = TRUE), 
-               onvr_dev = onvr - onvr_mean,
-               econ_mean = mean(econ, na.rm = TRUE), 
-               econ_dev = econ - econ_mean,
-               ment_mean = mean(ment, na.rm = TRUE), 
-               ment_dev = ment - ment_mean) %>% 
-        select(meting_mnd, gezo_mean, rond_mean, medi_mean, hulp_mean, eenz_mean, cont_mean, drei_mean, onvr_mean, econ_mean, ment_mean) %>% 
+               onvr_dev = onvr - onvr_mean) %>% 
+        select(meting_mnd, gezo_mean, rond_mean, drei_mean, onvr_mean) %>% 
   summarise_all(.funs = mean)) %>% 
   Reduce("+", .) / imp_post$m
 ```
@@ -458,7 +404,6 @@ fit[[1]] %>% summary() %>% print(correlation = TRUE)
 ---
 
 ## Correlations between vertrouwen (`q60_1`) and the calculated means per measurement occasion
-No correlation for `econ`, as the means over time are constant. 
 ```{r}
 Means <- imp_post %>% 
   complete("all") %>% 
@@ -468,42 +413,15 @@ Means <- imp_post %>%
                gezo_dev = gezo - gezo_mean,
                rond_mean = mean(rond, na.rm = TRUE), 
                rond_dev = rond - rond_mean,
-               medi_mean = mean(medi, na.rm = TRUE), 
-               medi_dev = medi - medi_mean,
-               hulp_mean = mean(hulp, na.rm = TRUE), 
-               hulp_dev = hulp - hulp_mean,
-               eenz_mean = mean(eenz, na.rm = TRUE), 
-               eenz_dev = eenz - eenz_mean,
-               cont_mean = mean(cont, na.rm = TRUE), 
-               cont_dev = cont - cont_mean,
                drei_mean = mean(drei, na.rm = TRUE), 
                drei_dev = drei - drei_mean,
                onvr_mean = mean(onvr, na.rm = TRUE), 
-               onvr_dev = onvr - onvr_mean,
-               econ_mean = mean(econ, na.rm = TRUE), 
-               econ_dev = econ - econ_mean,
-               ment_mean = mean(ment, na.rm = TRUE), 
-               ment_dev = ment - ment_mean) %>% 
-        select(q60_1, meting_mnd, gezo_mean, rond_mean, medi_mean, hulp_mean, eenz_mean, 
-               cont_mean, drei_mean, onvr_mean, econ_mean, ment_mean) %>% 
+               onvr_dev = onvr - onvr_mean) %>% 
+        select(q60_1, meting_mnd, gezo_mean, rond_mean,  drei_mean, onvr_mean) %>% 
         summarise_all(.funs = mean)) %>% 
   Reduce("+", .) / imp_post$m
 Means
 cor(Means)
 ```
 
-### Check if econ is constant
-```{r}
-imp_post %>% 
-  complete("all") %>% 
-  map(~.x %>% select(econ, meting_mnd) %>% group_by(meting_mnd) %>% summarise_all(.funs = mean)) %>% 
-  Reduce("+", .) / imp_post$m
-
-```
-### Verify with different calculation method
-```{r}
-imp_post %>% complete("all") %>% 
-  map(~.x %>% aggregate(econ ~ meting_mnd, data = ., FUN = mean)) %>% 
-  Reduce("+", .) / imp_post$m
-```
 
