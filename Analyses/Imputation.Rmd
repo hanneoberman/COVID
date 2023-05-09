@@ -119,37 +119,10 @@ dat_long %<>%
 
 ---
 
-## Add the occupation of participants
-
-First recode `isco` to `oesch`
-```{r work}
-oesch <- read_excel("oesch.xlsx")
-dat_oesch <- dat_long %>% 
-  mutate(isco08 = as.character(isco08))
-dat_oesch$oesch <- mapvalues(dat_oesch$isco08, 
-                             from = oesch$ISCO, 
-                             to = oesch$OESCH)
-```
-
-Then clean the `oesch` codes and make the empty cells for occupation explicitly NA
-```{r work2}
-dat_clean <- dat_oesch %>% 
-  zap_labels() %>% 
-  select(-isco08, -weegfactor) %>% 
-  mutate(oesch = na_if(oesch, 99),
-         oesch = na_if(oesch, 110),
-         oesch = na_if(oesch, 310),
-         oesch = na_if(oesch, 4111),
-         oesch = na_if(oesch, 7536))
-dat_clean$oesch[dat_clean$oesch == ""] <- NA
-```
-
----
-
 ## Combine health status question into a single variable
 ```{r health}
-dat_clean$q43 <- rowMeans(data.frame(dat_clean$q43_wave1, dat_clean$q43_wave2tot5), na.rm = TRUE)
-dat_clean[sapply(dat_clean, is.nan)] <- NA
+dat_long$q43 <- rowMeans(data.frame(dat_long$q43_wave1, dat_long$q43_wave2tot5), na.rm = TRUE)
+dat_long[sapply(dat_long, is.nan)] <- NA
 ```
 
 ---
@@ -159,7 +132,7 @@ dat_clean[sapply(dat_clean, is.nan)] <- NA
 Create variable vectors for imputation models
 ```{r variables}
 vars_outcome <- c("q60_1", "q49_1", "q49_2", "q49_3", "q49_4", "q49_5", "q49_6")
-vars_fixed <- c("edu", "oesch", "geboortejaar", "q29", "q52", "q53", "q54", "sekse", "etn_herkomst")
+vars_fixed <- c("edu", "geboortejaar", "q29", "q52", "q53", "q54", "sekse", "etn_herkomst")
 vars_random <- c("meting_mnd", "meting_squared", "q43", "q48_1", "q48_9", "q48_10", "q48_11", "q48_12", "q47_1", "q47_2", "q47_3", "q33_1", "q33_2", "q33_3", "q33_4", "q33_5", "q33_6")
 vars_covariates <- c("q34_1", "q34_2", "q34_3", "q34_4", "q34_5", "q38_1", "q38_2", "q38_3", "q38_4", "q31_1", "q31_2", "q31_3", "q31_4", "q31_5", "q31_6", "q31_7", "q59", "q60_2", "q60_3", "q60_4", "q60_8", "q60_10", "q60_12")
 vars_analyse <- c("id", vars_outcome, vars_fixed, vars_random)
@@ -167,8 +140,8 @@ vars_analyse <- c("id", vars_outcome, vars_fixed, vars_random)
 
 Filter the relevant variables
 ```{r filter}
-# from the cleaned data, select the analysis variables and covariates
-dat_clean <- dat_clean[c(vars_analyse, vars_covariates)]
+# select the analysis variables and covariates
+dat_clean <- dat_long[c(vars_analyse, vars_covariates)]
 vars <- names(dat_clean)
 ```
 
@@ -195,6 +168,22 @@ dat_imp[1:200,] %>%
   geom_line() +
   theme(legend.position = "none")
 ```
+
+---
+
+## Inspect missingness over time
+
+The following code converts the data into 'wide format', where each row represents one respondent, and time-varying variables are repeated measurements over several columns. This allows us to evaluate the missing data pattern in the outcome variable (q60_1) over the time in months (q60_1m0 through q60_1m17).
+
+```{r wide}
+dat_wide <- dat_imp %>% 
+  pivot_wider(id_cols = c("id", vars_fixed), values_from = c(vars_outcome, vars_random, vars_covariates), names_from = "meting_mnd", names_sep = "m")
+plot_pattern(dat_wide[, c("q60_1m0", "q60_1m3", "q60_1m7", "q60_1m12", "q60_1m17")], square = FALSE)
+patterns <- md.pattern(dat_wide[, c("q60_1m0", "q60_1m3", "q60_1m7", "q60_1m12", "q60_1m17")], plot = FALSE)
+n_obs <- sum(as.numeric(row.names(patterns)[patterns[, ncol(patterns)] < 4]))
+```
+
+Out of the `r nrow(dat_wide)` respondents, `r n_obs` have observed data on the outcome variable for at least two time points.
 
 ---
 
