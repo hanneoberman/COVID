@@ -1,0 +1,148 @@
+---
+title: "Additional analyses"
+author: "Hanne Oberman"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+---
+title: "Analyse COVID data"
+author: "Hanne Oberman"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    toc: true
+    toc_depth: 5
+    toc_float: true
+    number_sections: true
+---
+
+<style type="text/css">
+
+body{ /* Normal  */
+      font-size: 12px;
+  }
+td {  /* Table  */
+  font-size: 12px;
+}
+h1.title {
+  font-size: 20px;
+  color: DarkBlue;
+}
+h1 { /* Header 1 */
+  font-size: 18px;
+}
+h2 { /* Header 2 */
+    font-size: 16px;
+}
+h3 { /* Header 3 */
+  font-size: 14px;
+}
+code.r{ /* Code block */
+    font-size: 12px;
+}
+pre { /* Code block - determines code spacing between lines */
+    font-size: 12px;
+}
+</style>
+
+---
+
+# Packages and functions used
+```{r setup, include=TRUE, message=FALSE, warning=TRUE}
+# setup environment
+library(haven)      # For importing SPSS data
+library(readxl)     # For reading excel files
+library(plyr)       # Data wrangling
+library(dplyr)      # Data wrangling improved
+library(mice)       # For incomplete data analysis
+library(miceadds)   # Additions to mice
+library(ggmice)     # Plotting device for mice
+library(lme4)       # Linear mixed-effect modeling
+library(magrittr)   # Pipes in R
+library(lme4)       # linear mixed effects models
+library(broom.mixed)# tidy and glance models for mixed effects classes
+library(purrr)      # functional programming
+```
+
+---
+
+# Read in the incomplete data
+
+# Import the preprocessed incomplete data.
+```{r data}
+load("../Data/clean.Rdata")
+```
+
+
+# Post-processing the variables
+
+Combine items of scale contructs into variables.
+```{r cache = TRUE}
+long <- dat_clean %>% 
+  mutate(ment = rowMeans(select(., q49_1, q49_2, q49_3, q49_4, q49_5, q49_6), na.rm=TRUE), #mentale gevolgen
+         econ = rowMeans(select(., q52, q53, q54), na.rm=TRUE),  #economische
+         onvr = rowMeans(select(., q48_1, q48_9, q48_10,  q48_11, q48_12), na.rm=TRUE), #onvrede met beleid
+         drei = rowMeans(select(., q47_1, q47_2, q47_3), na.rm=TRUE), #dreiging ervaren
+         cont = rowMeans(select(., q33_1, q33_2, q33_3,  q33_4, q33_5, q33_6), na.rm=TRUE),  #sociaal contact
+         eenz = rowMeans(select(., q34_1, q34_2, q34_3,  q34_4, q34_5), na.rm=TRUE), #eenzaamheid
+         hulp = rowMeans(select(., q38_1, q38_2, q38_3,  q38_4), na.rm=TRUE), #hulp ontvangen
+         medi = rowMeans(select(., q31_1, q31_2, q31_3,  q31_4, q31_5, q31_6, q31_7), na.rm=TRUE), #mediagebruik
+         rond = q59, #rondkomen
+         gezo = q43, #gezondheid
+         huis = q29) #huishouden
+```
+
+Subset of columns.
+```{r cache = TRUE}
+long_subset <- long %>% 
+  select(id, 
+         meting_mnd, 
+         meting_squared, 
+         weegfactor,
+         edu, 
+         age, 
+         sekse, 
+         etn_herkomst, 
+         ment, 
+         econ, 
+         onvr, 
+         drei, 
+         cont, 
+         eenz, 
+         hulp, 
+         medi, 
+         rond, 
+         gezo,
+         q60_1,
+         huis
+         )
+```
+
+Select rows.
+
+```{r}
+complete_cases <- long_subset[rowSums(is.na(long_subset)) == 0, ]
+```
+
+---
+
+# Complete case analysis
+
+---
+
+Intercept-only model
+```{r}
+fit <- lme4::lmer(q60_1 ~ (1|id), complete_cases)
+broom.mixed::tidy(fit)
+```
+
+```{r}
+fit <- lme4::lmer(q60_1 ~ meting_mnd +  (1|id), complete_cases)
+broom.mixed::tidy(fit)
+```
+
+```{r}
+fit <- lme4::lmer(q60_1 ~ meting_mnd + age + sekse + etn_herkomst + edu + huis + (1|id), complete_cases)
+broom.mixed::tidy(fit)
+```
