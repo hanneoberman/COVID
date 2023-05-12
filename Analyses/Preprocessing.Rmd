@@ -72,6 +72,9 @@ modus <- function(x) {
 modus_per_column <- function(x) {
   apply(x, 2, modus)
 }
+
+# Set random number generator
+set.seed(11)
 ```
 
 ---
@@ -190,10 +193,10 @@ dat_demo$q29[dat_demo$q29 == 7] <- 5
 dat_demo <- dat_demo %>% mutate(
   q29 = as.factor(q29)
 )
-levels(dat_demo$q29)<- c("Alleenstaand zonder kinderen", 
-                     "Alleenstaand met kinderen", 
-                     "Samenwonend met partner met thuiswonende kinderen",
-                     "Samenwonend met partner zonder thuiswonende kinderen", 
+levels(dat_demo$q29)<- c("Alleenstaand_zonder-kinderen", 
+                     "Alleenstaand_met_kinderen", 
+                     "Samenwonend_met_partner_met_thuiswonende_kinderen",
+                     "Samenwonend_met_partner_zonder_thuiswonende_kinderen", 
                      "Anders")
 ```
 
@@ -213,9 +216,9 @@ Label factor levels for sex and ethnic background.
 dat_demo$sekse <- as.factor(dat_demo$sekse)
 levels(dat_demo$sekse) <- c("Man", "Vrouw")
 dat_demo$etn_herkomst <- as.factor(dat_demo$etn_herkomst)
-levels(dat_demo$etn_herkomst)<- c("Nederlandse achtergrond", 
-                              "Westerse migratieachtergrond", 
-                              "Niet-westerse migratieachtergrond")
+levels(dat_demo$etn_herkomst)<- c("Nederlandse_achtergrond", 
+                              "Westerse_migratieachtergrond", 
+                              "Niet_westerse_migratieachtergrond")
 ```
 
 Compute age at time point 1.
