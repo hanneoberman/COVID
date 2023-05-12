@@ -1,11 +1,4 @@
 ---
-title: "Additional analyses"
-author: "Hanne Oberman"
-date: "`r Sys.Date()`"
-output: html_document
----
-
----
 title: "Analyse COVID data"
 author: "Hanne Oberman"
 date: "`r Sys.Date()`"
@@ -50,6 +43,9 @@ pre { /* Code block - determines code spacing between lines */
 
 # Packages and functions used
 ```{r setup, include=TRUE, message=FALSE, warning=TRUE}
+# set random number generator
+set.seed(11)
+
 # setup environment
 library(haven)      # For importing SPSS data
 library(readxl)     # For reading excel files
@@ -70,11 +66,22 @@ library(tidyr)      # functional programming
 
 # Read in the incomplete data
 
-# Import the imputed data.
+Import the imputed data.
 ```{r}
 imp <- readRDS("../Data/imp_20it.RDS")
 long <- mice::complete(imp, "long", include = TRUE)
 ```
+
+Import the incomplete data to match the weights in the `weegfactor` variable.
+```{r}
+load("../Data/clean.Rdata")
+```
+
+Add weights to the imputed data.
+```{r}
+long <- left_join(long, unique(dat_clean[, c("id", "weegfactor")]), by= "id")
+```
+
 
 Load relevant variables.
 ```{r variables}
@@ -88,13 +95,23 @@ vars_analyse <- c("id", vars_fixed, vars_outcome, vars_random)
 
 # Post-processing the variables
 
-Label factor levels.
+Label factor levels. See Analysis.Rdm for details.
 ```{r}
+# Merge small categories
+long$q29[long$q29 == 6] <- 5
+long$q29[long$q29 == 7] <- 5
+long$edu[long$edu < 4] <- 1
+long$edu[long$edu == 4 | long$edu == 5] <- 2
+long$edu[long$edu > 5] <- 3
+# Recode variables
 long <- long %>% mutate(
   q29 = as.factor(q29),
   edu = as.factor(edu),
-  etn_herkomst = as.factor(etn_herkomst)
+  sekse = as.factor(sekse),
+  etn_herkomst = as.factor(etn_herkomst),
+  age = 2020-geboortejaar
 )
+# Label factors
 levels(long$q29)<- c("Alleenstaand_zonder-kinderen", 
                      "Alleenstaand_met_kinderen", 
                      "Samenwonend_met_partner_met_thuiswonende_kinderen",
@@ -104,6 +121,8 @@ levels(long$edu)<- c("Hoog", "Middel", "Laag")
 levels(long$etn_herkomst)<- c("Nederlandse_achtergrond", 
                               "Westerse_migratieachtergrond", 
                               "Niet_westerse_migratieachtergrond")
+levels(long$sekse) <- c("Man", "Vrouw")
+
 ```
 
 
@@ -263,7 +282,7 @@ The following code converts the data into 'wide format', where each row represen
 
 ```{r wide}
 dat_wide <- imp$data %>% 
-  pivot_wider(id_cols = c("id", all_of(vars_fixed)), values_from = c(vars_outcome, vars_random, vars_covariates), names_from = "meting_mnd", names_sep = "m")
+  pivot_wider(id_cols = all_of("id"), values_from = c(vars_outcome, vars_random, vars_covariates), names_from = "meting_mnd", names_sep = "m")
 plot_pattern(dat_wide[, c("id", "q60_1m0", "q60_1m3", "q60_1m7", "q60_1m12", "q60_1m17")], square = FALSE)
 n_mis <- rowSums(is.na(dat_wide[, c("q60_1m0", "q60_1m3", "q60_1m7", "q60_1m12", "q60_1m17")]))
 ids <- dat_wide[n_mis < 4, "id"]

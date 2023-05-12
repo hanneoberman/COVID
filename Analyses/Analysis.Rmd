@@ -43,6 +43,9 @@ pre { /* Code block - determines code spacing between lines */
 
 # Packages and functions used
 ```{r setup, include=TRUE, message=FALSE, warning=TRUE}
+# set random number generator
+set.seed(11)
+
 # setup environment
 library(haven)      # For importing SPSS data
 library(readxl)     # For reading excel files
@@ -62,7 +65,7 @@ library(purrr)      # functional programming
 
 # Read in the imputed data
 ```{r cache = TRUE}
-imp <- readRDS("imp_20it.RDS")
+imp <- readRDS("../Data/imp_20it.RDS")
 ```
 
 ---
@@ -76,22 +79,27 @@ long <- mice::complete(imp, "long", include = TRUE)
 
 # Post-processing the imputations
 
-## Combine smaller household categories into one 'other'
-```{r cache = TRUE}
+
+---
+
+## Recode demographic variables
+
+Combine smaller household categories into one 'other'.
+```{r household}
 long$q29[long$q29 == 6] <- 5
 long$q29[long$q29 == 7] <- 5
 long <- long %>% mutate(
   q29 = as.factor(q29)
 )
-levels(long$q29)<- c("Alleenstaand zonder kinderen", 
-                     "Alleenstaand met kinderen", 
-                     "Samenwonend met partner met thuiswonende kinderen",
-                     "Samenwonend met partner zonder thuiswonende kinderen", 
+levels(long$q29)<- c("Alleenstaand_zonder-kinderen", 
+                     "Alleenstaand_met_kinderen", 
+                     "Samenwonend_met_partner_met_thuiswonende_kinderen",
+                     "Samenwonend_met_partner_zonder_thuiswonende_kinderen", 
                      "Anders")
 ```
 
-## Combine education levels into three names categories
-```{r cache = TRUE}
+Combine education levels into three names categories.
+```{r edu}
 long$edu[long$edu < 4] <- 1
 long$edu[long$edu == 4 | long$edu == 5] <- 2
 long$edu[long$edu > 5] <- 3
@@ -101,17 +109,24 @@ long <- long %>% mutate(
 levels(long$edu)<- c("Hoog", "Middel", "Laag")
 ```
 
-## Label factor levels for sex and ethnic background
-```{r cache = TRUE}
+Label factor levels for sex and ethnic background.
+```{r sex}
 long$sekse <- as.factor(long$sekse)
 levels(long$sekse) <- c("Man", "Vrouw")
 long$etn_herkomst <- as.factor(long$etn_herkomst)
-levels(long$etn_herkomst)<- c("Nederlandse achtergrond", 
-                              "Westerse migratieachtergrond", 
-                              "Niet-westerse migratieachtergrond")
+levels(long$etn_herkomst)<- c("Nederlandse_achtergrond", 
+                              "Westerse_migratieachtergrond", 
+                              "Niet_westerse_migratieachtergrond")
 ```
 
-## Combine items of scale contructs into variables
+Compute age at time point 1.
+```{r age}
+long <- long %>% mutate(
+  age = 2020-geboortejaar
+)
+```
+
+Combine items of scale contructs into variables.
 ```{r cache = TRUE}
 long <- long %>% 
   mutate(ment = rowMeans(select(., q49_1, q49_2, q49_3, q49_4, q49_5, q49_6), na.rm=TRUE), #mentale gevolgen
@@ -123,18 +138,13 @@ long <- long %>%
          hulp = rowMeans(select(., q38_1, q38_2, q38_3,  q38_4), na.rm=TRUE), #hulp ontvangen
          medi = rowMeans(select(., q31_1, q31_2, q31_3,  q31_4, q31_5, q31_6, q31_7), na.rm=TRUE), #mediagebruik
          rond = q59, #rondkomen
-         gezo = q43,
-         huis = q29) #gezondheid
+         gezo = q43, #gezondheid
+         huis = q29) #huishouden
 ```
 
 ---
 
-## Calculate age
-```{r cache = TRUE}
-long <- long %>% mutate(
-  age = 2020-geboortejaar
-)
-```
+
 
 ---
 
@@ -147,7 +157,6 @@ long_subset <- long %>%
          meting_mnd, 
          meting_squared, 
          edu, 
-         oesch, 
          age, 
          sekse, 
          etn_herkomst, 
@@ -204,7 +213,7 @@ results_vert
 ```{r cache = TRUE}
 fit <- imp_post %>% 
   complete("all") %>% 
-  map(~.x %$% lme4::lmer(q60_1 ~ meting_mnd + oesch + age + sekse + etn_herkomst + edu + huis + (1|id))) 
+  map(~.x %$% lme4::lmer(q60_1 ~ meting_mnd + age + sekse + etn_herkomst + edu + huis + (1|id))) 
 # First imputed set
 fit[[1]] %>% summary() %>% print(correlation = TRUE)
 # Summary AIC
@@ -506,4 +515,5 @@ imp_post %>% complete("all") %>%
   map(~.x %>% aggregate(econ ~ meting_mnd, data = ., FUN = mean)) %>% 
   Reduce("+", .) / imp_post$m
 ```
+
 
