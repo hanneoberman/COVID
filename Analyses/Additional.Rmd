@@ -229,7 +229,26 @@ results_vert
 ```{r }
 fit <- imp_post %>% 
   complete("all") %>% 
-  map(~.x %$% lme4::lmer(q60_1 ~ meting_mnd + age + sekse + etn_herkomst + edu + huis + (1|id) + gezo + rond + medi + hulp + eenz + cont + drei + onvr + econ + ment), weights = .x$weegfactor) 
+  map(~.x %$% lme4::lmer(q60_1 ~ meting_mnd + age + sekse + etn_herkomst + edu + huis + (1|id) + gezo + rond + drei + onvr), weights = .x$weegfactor) 
+# First imputed set
+fit[[1]] %>% summary() %>% print(correlation = TRUE)
+# Summary AIC
+fit %>% map(~.x %>% AIC()) %>% unlist() %>% summary()
+# Pooled imputations
+fit %>% 
+  pool() %>% 
+  broom.mixed::tidy()
+results_vert <- mitml::testEstimates(as.mitml.result(fit), extra.pars = TRUE)
+results_vert
+```
+
+---
+
+## Analysis 4: Model with random effects for time added
+```{r}
+fit <- imp_post %>% 
+  complete("all") %>% 
+  map(~.x %$% lme4::lmer(q60_1 ~ meting_mnd + age + sekse + etn_herkomst + edu + huis + (1 + meting_mnd | id) + gezo + rond + drei + onvr), weights = .x$weegfactor) 
 # First imputed set
 fit[[1]] %>% summary() %>% print(correlation = TRUE)
 # Summary AIC
