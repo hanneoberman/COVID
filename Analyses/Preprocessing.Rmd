@@ -1,0 +1,257 @@
+---
+title: "Preprocessing"
+author: "Hanne Oberman"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    toc: true
+    toc_depth: 5
+    toc_float: true
+    number_sections: true
+---
+
+<style type="text/css">
+
+body{ /* Normal  */
+      font-size: 12px;
+  }
+td {  /* Table  */
+  font-size: 12px;
+}
+h1.title {
+  font-size: 20px;
+  color: DarkBlue;
+}
+h1 { /* Header 1 */
+  font-size: 18px;
+}
+h2 { /* Header 2 */
+    font-size: 16px;
+}
+h3 { /* Header 3 */
+  font-size: 14px;
+}
+code.r{ /* Code block */
+    font-size: 12px;
+}
+pre { /* Code block - determines code spacing between lines */
+    font-size: 12px;
+}
+</style>
+
+---
+
+# Packages and functions used
+```{r setup, include=TRUE, message=FALSE, warning=TRUE}
+# setup environment
+library(haven)      # For importing SPSS data
+library(tidyverse)  # All things useful
+library(psych)      # For descriptive statistics
+library(mice)       # For incomplete data analysis
+library(miceadds)   # Additions to mice
+library(ggmice)     # Plotting device for mice
+library(lme4)       # Linear mixed-effect modeling
+library(plyr)       # Data wrangling
+library(magrittr)   # Pipes in R
+
+# Define function for `not in`
+`%nin%` <- Negate(`%in%`)
+
+# Define function to compute the mode of a vector
+modus <- function(x) {
+  tally <- table(x, useNA = "no")
+  if(dim(tally)==0) {
+    mode <- NA
+    } else {
+      mode <- names(which.max(tally))
+      }
+  return(as.numeric(mode))
+}
+
+# Define function to compute the mode of several columns
+modus_per_column <- function(x) {
+  apply(x, 2, modus)
+}
+
+# Set random number generator
+set.seed(11)
+```
+
+---
+
+# Import and inspect the data
+
+--- 
+
+The SPSS formatted data is loaded into `R`.
+```{r data}
+dat_raw <- read_sav("../Data/data_correctlycoded_GV.zsav") %>% zap_labels()
+```
+
+Calculate descriptive statistics.
+```{r desc}
+psych::describe(dat_raw, fast = TRUE)
+```
+
+Rename labels and remove attributes.
+```{r rename}
+# clean names
+dat_rename <- janitor::clean_names(dat_raw) 
+# strip attributes
+dat_rename[] <- lapply(dat_rename, as.vector)
+```
+
+
+---
+
+# Data editing
+
+---
+
+## Recode measurement occasions
+
+Make time dimension consistent and add polynomial for measurement occasion. The following step adds non-observed measurement occasions when participants do not have all measurement occasions observed. 
+```{r time}
+dat_meting <- expand.grid(id = unique(dat_rename$id), meting = 1:5)
+dat_long <- full_join(dat_rename, dat_meting)
+```
+
+The following step recodes the measurement occasions into months and adds a quadratic term.
+```{r time2}
+dat_long %<>%
+  mutate(
+    meting_mnd = recode_factor(
+      meting,
+      `1` = "0",
+      `2` = "3",
+      `3` = "7",
+      `4` = "12",
+      `5` = "17"
+    ) %>%
+      as.character() %>% as.numeric(),
+    meting_squared = meting_mnd * meting_mnd
+  )
+```
+
+---
+
+## Recode health status
+
+Combine the two health status questions into a single variable.
+```{r health}
+dat_long$q43 <- rowMeans(data.frame(dat_long$q43_wave1, dat_long$q43_wave2tot5), na.rm = TRUE) 
+dat_long[sapply(dat_long, is.nan)] <- NA 
+```
+
+---
+
+## Fill in observed demographics
+
+Demographic variables are assumed to be fixed over measurement occasions within respondents. Therefore, we can fill in missing demographics based on observed measurements. The following code takes the most frequent observation per participant across measurement occasions for variables that are assumed constant in the analysis model, and fills this value in for all measurement occasions.
+```{r constants}
+# calculate mode for constant variables
+modi <-
+  split(dat_long[, c(
+    "id",
+    "weegfactor",
+    "edu",
+    "geboortejaar",
+    "q29",
+    "q52",
+    "q53",
+    "q54",
+    "sekse",
+    "etn_herkomst"
+  )], factor(dat_long$id)) %>%
+  map_dfr( ~ modus_per_column(.x)) %>%
+  mutate(across(everything(), ~ as.numeric(.x)),
+         id = as.numeric(id))
+# combine constants with the time-varying data
+dat_demo <-
+  dat_long[, names(dat_long) %nin% c(
+    "weegfactor",
+    "edu",
+    "geboortejaar",
+    "q29",
+    "q52",
+    "q53",
+    "q54",
+    "sekse",
+    "etn_herkomst"
+  )] %>%
+  left_join(modi, by = "id")
+```
+
+---
+
+## Recode demographic variables
+
+Combine smaller household categories into one 'other'.
+```{r household}
+dat_demo$q29[dat_demo$q29 == 6] <- 5
+dat_demo$q29[dat_demo$q29 == 7] <- 5
+dat_demo <- dat_demo %>% mutate(
+  q29 = as.factor(q29)
+)
+levels(dat_demo$q29)<- c("Alleenstaand_zonder-kinderen", 
+                     "Alleenstaand_met_kinderen", 
+                     "Samenwonend_met_partner_met_thuiswonende_kinderen",
+                     "Samenwonend_met_partner_zonder_thuiswonende_kinderen", 
+                     "Anders")
+```
+
+Combine education levels into three names categories.
+```{r edu}
+dat_demo$edu[dat_demo$edu < 4] <- 1
+dat_demo$edu[dat_demo$edu == 4 | dat_demo$edu == 5] <- 2
+dat_demo$edu[dat_demo$edu > 5] <- 3
+dat_demo <- dat_demo %>% mutate(
+  edu = as.factor(edu)
+)
+levels(dat_demo$edu)<- c("Hoog", "Middel", "Laag")
+```
+
+Label factor levels for sex and ethnic background.
+```{r sex}
+dat_demo$sekse <- as.factor(dat_demo$sekse)
+levels(dat_demo$sekse) <- c("Man", "Vrouw")
+dat_demo$etn_herkomst <- as.factor(dat_demo$etn_herkomst)
+levels(dat_demo$etn_herkomst)<- c("Nederlandse_achtergrond", 
+                              "Westerse_migratieachtergrond", 
+                              "Niet_westerse_migratieachtergrond")
+```
+
+Compute age at time point 1.
+```{r age}
+dat_demo <- dat_demo %>% mutate(
+  age = 2020-geboortejaar
+)
+```
+
+
+---
+
+# Select and save clean data
+
+---
+
+Group relevant variables together for further analysis.
+```{r variables}
+vars_outcome <- c("q60_1", "q49_1", "q49_2", "q49_3", "q49_4", "q49_5", "q49_6")
+vars_fixed <- c("weegfactor", "edu", "age", "q29", "q52", "q53", "q54", "sekse", "etn_herkomst")
+vars_random <- c("meting_mnd", "meting_squared", "q43", "q48_1", "q48_9", "q48_10", "q48_11", "q48_12", "q47_1", "q47_2", "q47_3", "q33_1", "q33_2", "q33_3", "q33_4", "q33_5", "q33_6")
+vars_covariates <- c("q34_1", "q34_2", "q34_3", "q34_4", "q34_5", "q38_1", "q38_2", "q38_3", "q38_4", "q31_1", "q31_2", "q31_3", "q31_4", "q31_5", "q31_6", "q31_7", "q59", "q60_2", "q60_3", "q60_4", "q60_8", "q60_10", "q60_12")
+vars_analyse <- c("id", vars_fixed, vars_outcome, vars_random)
+```
+
+Filter the relevant variables.
+```{r filter}
+dat_clean <- dat_demo[c(vars_analyse, vars_covariates)] # select the analysis variables and covariates
+```
+
+Save the data.
+```{r clean}
+save(dat_clean, file = "../Data/clean.Rdata")
+```
+
+
