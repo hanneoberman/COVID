@@ -1,0 +1,127 @@
+---
+title: "Untitled"
+format: html
+editor: visual
+---
+
+# Packages and functions used
+```{r setup, include=TRUE, message=FALSE, warning=TRUE}
+# setup environment
+library(haven)      # For importing SPSS data
+library(readxl)     # For reading excel files
+library(plyr)       # Data wrangling
+library(dplyr)      # Data wrangling improved
+library(mice)       # For incomplete data analysis
+library(miceadds)   # Additions to mice
+library(ggmice)     # Plotting device for mice
+library(lme4)       # Linear mixed-effect modeling
+library(magrittr)   # Pipes in R
+library(lme4)       # linear mixed effects models
+library(broom.mixed)# tidy and glance models for mixed effects classes
+library(purrr)      # functional programming
+```
+
+---
+
+# Read in the imputed data
+```{r cache = TRUE}
+imp <- readRDS("imp_20it.RDS")
+```
+
+---
+
+# Calculate means per imputed set
+```{r}
+imp %>% 
+  complete("all") %>% 
+  map(~.x %>% 
+        select(meting_mnd, q52, q53, q54) %>% 
+        rowwise() %>% 
+        mutate(mean = mean(c(q52, q53, q54))) %>% 
+        group_by(meting_mnd) %>% 
+        summarise_all(list(mean)))
+```
+
+# Calculate means per imputed set
+```{r}
+imp %>% 
+  complete("all") %>% 
+  map(~.x %>% 
+        select(meting_mnd, q52, q53, q54) %>% 
+        rowwise() %>% 
+        mutate(mean = mean(c(q52, q53, q54))) %>% 
+        ungroup() %>% 
+        group_by(meting_mnd) %>% 
+        summarise_all(list(mean)))
+```
+
+--- 
+
+# Calculate pooled means over imputed set
+```{r}
+imp %>% 
+  complete("all") %>% 
+  map(~.x %>% 
+        select(meting_mnd, q52, q53, q54) %>% 
+        rowwise() %>% 
+        mutate(mean = mean(c(q52, q53, q54))) %>% 
+        group_by(meting_mnd) %>% 
+        summarise_all(list(mean))) %>% 
+  Reduce("+", .) / 10
+```
+
+---
+
+# Original data means from `mids` object
+```{r}
+imp$data %>% 
+  select(meting_mnd, q52, q53, q54) %>% 
+  split(f = .$meting_mnd) %>% 
+  map(~.x %>% colMeans(na.rm = TRUE))
+
+#check
+imp$data %>% 
+  filter(meting_mnd == 0) %>% 
+  select(q52, q53, q54) %>% 
+  colMeans(na.rm = TRUE)
+
+imp$data %>% 
+  filter(meting_mnd == 3) %>% 
+  select(q52, q53, q54) %>% 
+  colMeans(na.rm = TRUE)
+```
+
+---
+
+# Original SPSS data
+```{r}
+dat_raw <- read_sav("data.zsav") %>% zap_labels()
+dat_raw %>% 
+  select(METING, Q52, Q53, Q54) %>% 
+  split(f = .$METING) %>% 
+  map(~.x %>% colMeans(na.rm = TRUE))
+
+#check
+dat_raw  %>% 
+  filter(METING == 0) %>% 
+  select(Q52, Q53, Q54) %>% 
+  colMeans(na.rm = TRUE)
+
+#check another
+dat_raw %>% 
+  filter(METING == 3) %>% 
+  select(Q52, Q53, Q54) %>% 
+  colMeans(na.rm = TRUE)
+```
+
+---
+
+# How incomplete
+```{r}
+dat_raw %>% 
+  select(METING, Q52, Q53, Q54) %>% 
+  apply(2, function(x) sum(is.na(x)))
+```
+
+
+
