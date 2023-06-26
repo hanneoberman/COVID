@@ -60,6 +60,7 @@ library(lme4)       # linear mixed effects models
 library(broom.mixed)# tidy and glance models for mixed effects classes
 library(purrr)      # functional programming
 library(tidyr)      # functional programming
+library(DT)         # interactive tables
 ```
 
 ---
@@ -176,6 +177,7 @@ long_subset <- long %>%
 imp_post <- as.mids(long_subset)
 #save(imp_post, file = "./imputaties.RData")
 ```
+
 
 ---
 
@@ -371,4 +373,22 @@ results_vert
 ```
 
 
+---
+
+# Weighted averages
+
+---
+
+Compute weighted averages per time point (Figuur 2).
+
+```{r weighted}
+imp_post$data %>% 
+  group_by(meting_mnd) %>% 
+  summarise(vertrouwen = weighted.mean(q60_1, weegfactor, na.rm = TRUE),
+            onvrede = weighted.mean(onvr, weegfactor, na.rm = TRUE),
+            dreiging = weighted.mean(drei, weegfactor, na.rm = TRUE),
+            rondkomen = weighted.mean(rond, weegfactor, na.rm = TRUE),
+            gezondheid = weighted.mean(gezo, weegfactor, na.rm = TRUE)
+            )
+```
 

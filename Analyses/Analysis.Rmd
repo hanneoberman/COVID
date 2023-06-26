@@ -179,8 +179,10 @@ long_subset <- long %>%
 ## Convert back to imputation object
 ```{r cache = TRUE}
 imp_post <- as.mids(long_subset)
-#save(imp_post, file = "./imputaties.RData")
+save(imp_post, file = "../Data/imputaties.RData")
 ```
+
+
 
 ---
 
