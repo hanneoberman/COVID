@@ -2421,508 +2421,59 @@ ids &lt;- dat_wide[n_mis &lt; 4, &quot;id&quot;]</code></pre>
 <p>Now we need to load the imputed data and select the cases with two or
 more measurements.</p>
 <pre class="r"><code>dat_remeasured &lt;- long_subset[long_subset$id %in% ids$id, ]
-imp_post &lt;- as.mids(dat_remeasured)</code></pre>
+imp_post2 &lt;- as.mids(dat_remeasured)</code></pre>
 <div id="analysis-1-model-with-time-1" class="section level2" number="6.1">
 <h2><span class="header-section-number">6.1</span> Analysis 1: Model
 with Time</h2>
-<pre class="r"><code>fit &lt;- imp_post %&gt;% 
+<pre class="r"><code>fit &lt;- imp_post2 %&gt;% 
   complete(&quot;all&quot;) %&gt;% 
   map(~.x %$% lme4::lmer(q60_1 ~ meting_mnd +  (1|id))) 
 # First imputed set
-fit[[1]] %&gt;% summary() %&gt;% print(correlation = TRUE)</code></pre>
-<pre><code>## Linear mixed model fit by REML [&#39;lmerMod&#39;]
-## Formula: q60_1 ~ meting_mnd + (1 | id)
-## 
-## REML criterion at convergence: 272281.1
-## 
-## Scaled residuals: 
-##     Min      1Q  Median      3Q     Max 
-## -4.8441 -0.5473  0.0150  0.5761  4.3266 
-## 
-## Random effects:
-##  Groups   Name        Variance Std.Dev.
-##  id       (Intercept) 0.8784   0.9372  
-##  Residual             0.4294   0.6553  
-## Number of obs: 109955, groups:  id, 21991
-## 
-## Fixed effects:
-##               Estimate Std. Error t value
-## (Intercept)  3.7901305  0.0070856   534.9
-## meting_mnd  -0.0527766  0.0003233  -163.2
-## 
-## Correlation of Fixed Effects:
-##            (Intr)
-## meting_mnd -0.356</code></pre>
-<pre class="r"><code># Summary AIC
-fit %&gt;% map(~.x %&gt;% AIC()) %&gt;% unlist() %&gt;% summary()</code></pre>
-<pre><code>##    Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
-##  267750  268237  268831  269883  269824  277239</code></pre>
-<pre class="r"><code># Pooled imputations
+fit[[1]] %&gt;% summary() %&gt;% print(correlation = TRUE)
+# Summary AIC
+fit %&gt;% map(~.x %&gt;% AIC()) %&gt;% unlist() %&gt;% summary()
+# Pooled imputations
 fit %&gt;% 
   pool() %&gt;% 
-  broom.mixed::tidy()</code></pre>
-<pre><code>##          term    estimate   std.error statistic      p.value            b
-## 1 (Intercept)  3.80610623 0.017849321 213.23535 6.640965e-24 2.440288e-04
-## 2  meting_mnd -0.05373913 0.001431597 -37.53789 4.785085e-12 1.770715e-06
-##          df  dfcom       fmi    lambda  m       riv         ubar
-## 1 12.669042 109951 0.8626380 0.8425398 10  5.350809 5.016656e-05
-## 2  9.946041 109951 0.9580504 0.9503856 10 19.155440 1.016832e-07</code></pre>
-<pre class="r"><code>results_vert &lt;- mitml::testEstimates(as.mitml.result(fit), extra.pars = TRUE)
+  broom.mixed::tidy()
+results_vert &lt;- mitml::testEstimates(as.mitml.result(fit), extra.pars = TRUE)
 results_vert</code></pre>
-<pre><code>## 
-## Call:
-## 
-## mitml::testEstimates(model = as.mitml.result(fit), extra.pars = TRUE)
-## 
-## Final parameter estimates and inferences obtained from 10 imputed data sets.
-## 
-##              Estimate Std.Error   t.value        df   P(&gt;|t|)       RIV       FMI 
-## (Intercept)     3.806     0.018   213.235    12.678     0.000     5.351     0.863 
-## meting_mnd     -0.054     0.001   -37.538     9.964     0.000    19.155     0.958 
-## 
-##                         Estimate 
-## Intercept~~Intercept|id    0.884 
-## Residual~~Residual         0.418 
-## ICC|id                     0.679 
-## 
-## Unadjusted hypothesis test as appropriate in larger samples.</code></pre>
 <hr />
 </div>
 <div id="analysis-2-model-with-time-independent-predictors-added-1" class="section level2" number="6.2">
 <h2><span class="header-section-number">6.2</span> Analysis 2: Model
 with time-independent predictors added</h2>
-<pre class="r"><code>fit &lt;- imp_post %&gt;% 
+<pre class="r"><code>fit &lt;- imp_post2 %&gt;% 
   complete(&quot;all&quot;) %&gt;% 
   map(~.x %$% lme4::lmer(q60_1 ~ meting_mnd + age + sekse + etn_herkomst + edu + huis + (1|id))) 
 # First imputed set
-fit[[1]] %&gt;% summary() %&gt;% print(correlation = TRUE)</code></pre>
-<pre><code>## Linear mixed model fit by REML [&#39;lmerMod&#39;]
-## Formula: q60_1 ~ meting_mnd + age + sekse + etn_herkomst + edu + huis +  
-##     (1 | id)
-## 
-## REML criterion at convergence: 271486.8
-## 
-## Scaled residuals: 
-##     Min      1Q  Median      3Q     Max 
-## -4.8113 -0.5634  0.0144  0.5973  4.2965 
-## 
-## Random effects:
-##  Groups   Name        Variance Std.Dev.
-##  id       (Intercept) 0.8418   0.9175  
-##  Residual             0.4294   0.6553  
-## Number of obs: 109955, groups:  id, 21991
-## 
-## Fixed effects:
-##                                                            Estimate Std. Error
-## (Intercept)                                               3.8035414  0.0314600
-## meting_mnd                                               -0.0527766  0.0003233
-## age                                                       0.0001650  0.0004735
-## sekseVrouw                                                0.0058467  0.0135760
-## etn_herkomstWesterse_migratieachtergrond                 -0.0420275  0.0219736
-## etn_herkomstNiet_westerse_migratieachtergrond            -0.0601006  0.0397717
-## eduMiddel                                                -0.3803116  0.0160696
-## eduLaag                                                  -0.5152275  0.0312919
-## huisAlleenstaand_met_kinderen                            -0.0732780  0.0363005
-## huisSamenwonend_met_partner_met_thuiswonende_kinderen     0.1361978  0.0194068
-## huisSamenwonend_met_partner_zonder_thuiswonende_kinderen  0.1390972  0.0166072
-## huisAnders                                               -0.0177333  0.0314039
-##                                                           t value
-## (Intercept)                                               120.901
-## meting_mnd                                               -163.246
-## age                                                         0.349
-## sekseVrouw                                                  0.431
-## etn_herkomstWesterse_migratieachtergrond                   -1.913
-## etn_herkomstNiet_westerse_migratieachtergrond              -1.511
-## eduMiddel                                                 -23.666
-## eduLaag                                                   -16.465
-## huisAlleenstaand_met_kinderen                              -2.019
-## huisSamenwonend_met_partner_met_thuiswonende_kinderen       7.018
-## huisSamenwonend_met_partner_zonder_thuiswonende_kinderen    8.376
-## huisAnders                                                 -0.565
-## 
-## Correlation of Fixed Effects:
-##                        (Intr) mtng_m age    sksVrw etn_W_ et_N__ edMddl eduLag
-## meting_mnd             -0.080                                                 
-## age                    -0.868  0.000                                          
-## sekseVrouw             -0.256  0.000  0.066                                   
-## etn_hrkmsW_            -0.051  0.000 -0.038 -0.021                            
-## etn_hrkmN__            -0.099  0.000  0.061 -0.008  0.057                     
-## eduMiddel              -0.032  0.000 -0.108  0.023  0.069  0.036              
-## eduLaag                 0.008  0.000 -0.108  0.060  0.040  0.013  0.133       
-## hsAllnstn__            -0.174  0.000  0.041 -0.054 -0.010 -0.008 -0.013  0.000
-## hsSmnwnnd_mt_prtnr_m__ -0.483  0.000  0.206  0.093  0.018 -0.002 -0.004  0.033
-## hsSmnwnnd_mt_prtnr_z__ -0.269  0.000 -0.093  0.085  0.023  0.025 -0.006  0.020
-## huisAnders             -0.468  0.000  0.325  0.045  0.001  0.005  0.004 -0.007
-##                        hsAl__ hsSmnwnnd_mt_prtnr_m__ hsSmnwnnd_mt_prtnr_z__
-## meting_mnd                                                                 
-## age                                                                        
-## sekseVrouw                                                                 
-## etn_hrkmsW_                                                                
-## etn_hrkmN__                                                                
-## eduMiddel                                                                  
-## eduLaag                                                                    
-## hsAllnstn__                                                                
-## hsSmnwnnd_mt_prtnr_m__  0.249                                              
-## hsSmnwnnd_mt_prtnr_z__  0.277  0.523                                       
-## huisAnders              0.163  0.354                  0.302</code></pre>
-<pre class="r"><code># Summary AIC
-fit %&gt;% map(~.x %&gt;% AIC()) %&gt;% unlist() %&gt;% summary()</code></pre>
-<pre><code>##    Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
-##  266829  267354  267695  268976  269001  276496</code></pre>
-<pre class="r"><code># Pooled imputations
+fit[[1]] %&gt;% summary() %&gt;% print(correlation = TRUE)
+# Summary AIC
+fit %&gt;% map(~.x %&gt;% AIC()) %&gt;% unlist() %&gt;% summary()
+# Pooled imputations
 fit %&gt;% 
   pool() %&gt;% 
-  broom.mixed::tidy()</code></pre>
-<pre><code>##                                                        term     estimate
-## 1                                               (Intercept)  3.990369406
-## 2                                                meting_mnd -0.053739129
-## 3                                                       age -0.002886267
-## 4                                                sekseVrouw  0.002498397
-## 5                  etn_herkomstWesterse_migratieachtergrond -0.039252062
-## 6             etn_herkomstNiet_westerse_migratieachtergrond -0.054609278
-## 7                                                 eduMiddel -0.378643990
-## 8                                                   eduLaag -0.518772066
-## 9                             huisAlleenstaand_met_kinderen -0.080365675
-## 10    huisSamenwonend_met_partner_met_thuiswonende_kinderen  0.135096199
-## 11 huisSamenwonend_met_partner_zonder_thuiswonende_kinderen  0.143168942
-## 12                                               huisAnders -0.016919815
-##      std.error   statistic      p.value            b          df  dfcom
-## 1  0.175160785  22.7811802 1.145567e-09 2.699518e-02    9.581939 109941
-## 2  0.001431597 -37.5378937 4.785101e-12 1.770715e-06    9.946040 109941
-## 3  0.002942975  -0.9807312 3.511615e-01 7.670538e-06    9.451538 109941
-## 4  0.013793661   0.1811264 8.562735e-01 5.921011e-06 7162.299821 109941
-## 5  0.023221576  -1.6903272 9.136717e-02 5.259740e-05  775.620858 109941
-## 6  0.040643601  -1.3436132 1.791460e-01 6.806913e-05 4205.013657 109941
-## 7  0.017258416 -21.9396725 1.079850e-74 3.672470e-05  486.759033 109941
-## 8  0.034467500 -15.0510500 5.408206e-38 1.925193e-04  282.350403 109941
-## 9  0.037499476  -2.1431146 3.222182e-02 8.404704e-05 2040.784664 109941
-## 10 0.019749831   6.8403725 8.671110e-12 1.323979e-05 6084.621046 109941
-## 11 0.017307425   8.2721111 3.182217e-16 2.234499e-05 1319.204167 109941
-## 12 0.033576566  -0.5039174 6.145222e-01 1.310474e-04  547.342083 109941
-##           fmi     lambda  m         riv         ubar
-## 1  0.97295515 0.96784364 10 30.09804339 9.865991e-04
-## 2  0.95805040 0.95038560 10 19.15544012 1.016832e-07
-## 3  0.97833892 0.97419387 10 37.75048523 2.235095e-07
-## 4  0.03450134 0.03423177 10  0.03544512 1.837520e-04
-## 5  0.10958659 0.10729355 10  0.12018905 4.813844e-04
-## 6  0.04578090 0.04532716 10  0.04747926 1.577026e-03
-## 7  0.13915771 0.13562792 10  0.15690919 2.574557e-04
-## 8  0.18401683 0.17825730 10  0.21692593 9.762374e-04
-## 9  0.06665954 0.06574530 10  0.07037192 1.313759e-03
-## 10 0.03765392 0.03733765 10  0.03878582 3.754921e-04
-## 11 0.08344406 0.08205555 10  0.08939054 2.749675e-04
-## 12 0.13103355 0.12786412 10  0.14661032 9.832336e-04</code></pre>
-<pre class="r"><code>results_vert &lt;- mitml::testEstimates(as.mitml.result(fit), extra.pars = TRUE)
+  broom.mixed::tidy()
+results_vert &lt;- mitml::testEstimates(as.mitml.result(fit), extra.pars = TRUE)
 results_vert</code></pre>
-<pre><code>## 
-## Call:
-## 
-## mitml::testEstimates(model = as.mitml.result(fit), extra.pars = TRUE)
-## 
-## Final parameter estimates and inferences obtained from 10 imputed data sets.
-## 
-##                                                           Estimate Std.Error   t.value        df   P(&gt;|t|)       RIV       FMI 
-## (Intercept)                                                  3.990     0.175    22.781     9.608     0.000    30.098     0.973 
-## meting_mnd                                                  -0.054     0.001   -37.538     9.964     0.000    19.155     0.958 
-## age                                                         -0.003     0.003    -0.981     9.483     0.351    37.750     0.978 
-## sekseVrouw                                                   0.002     0.014     0.181  7680.397     0.856     0.035     0.034 
-## etn_herkomstWesterse_migratieachtergrond                    -0.039     0.023    -1.690   781.799     0.091     0.120     0.110 
-## etn_herkomstNiet_westerse_migratieachtergrond               -0.055     0.041    -1.344  4380.517     0.179     0.047     0.046 
-## eduMiddel                                                   -0.379     0.017   -21.940   489.265     0.000     0.157     0.139 
-## eduLaag                                                     -0.519     0.034   -15.051   283.236     0.000     0.217     0.184 
-## huisAlleenstaand_met_kinderen                               -0.080     0.037    -2.143  2082.155     0.032     0.070     0.067 
-## huisSamenwonend_met_partner_met_thuiswonende_kinderen        0.135     0.020     6.840  6455.777     0.000     0.039     0.038 
-## huisSamenwonend_met_partner_zonder_thuiswonende_kinderen     0.143     0.017     8.272  1336.677     0.000     0.089     0.083 
-## huisAnders                                                  -0.017     0.034    -0.504   550.485     0.615     0.147     0.131 
-## 
-##                         Estimate 
-## Intercept~~Intercept|id    0.841 
-## Residual~~Residual         0.418 
-## ICC|id                     0.668 
-## 
-## Unadjusted hypothesis test as appropriate in larger samples.</code></pre>
 <hr />
 </div>
 <div id="analysis-3-model-with-time-dependent-predictors-added-1" class="section level2" number="6.3">
 <h2><span class="header-section-number">6.3</span> Analysis 3: Model
 with time-dependent predictors added</h2>
-<pre class="r"><code>fit &lt;- imp_post %&gt;% 
+<pre class="r"><code>fit &lt;- imp_post2 %&gt;% 
   complete(&quot;all&quot;) %&gt;% 
   map(~.x %$% lme4::lmer(q60_1 ~ meting_mnd + age + sekse + etn_herkomst + edu + huis + (1|id) + gezo + rond + medi + hulp + eenz + cont + drei + onvr + econ + ment)) 
 # First imputed set
-fit[[1]] %&gt;% summary() %&gt;% print(correlation = TRUE)</code></pre>
-<pre><code>## Linear mixed model fit by REML [&#39;lmerMod&#39;]
-## Formula: q60_1 ~ meting_mnd + age + sekse + etn_herkomst + edu + huis +  
-##     (1 | id) + gezo + rond + medi + hulp + eenz + cont + drei +  
-##     onvr + econ + ment
-## 
-## REML criterion at convergence: 262581.2
-## 
-## Scaled residuals: 
-##     Min      1Q  Median      3Q     Max 
-## -4.9244 -0.5628  0.0343  0.6077  4.1884 
-## 
-## Random effects:
-##  Groups   Name        Variance Std.Dev.
-##  id       (Intercept) 0.6396   0.7998  
-##  Residual             0.4127   0.6424  
-## Number of obs: 109955, groups:  id, 21991
-## 
-## Fixed effects:
-##                                                            Estimate Std. Error
-## (Intercept)                                               4.9414518  0.0540838
-## meting_mnd                                               -0.0454420  0.0003327
-## age                                                      -0.0024936  0.0004254
-## sekseVrouw                                               -0.0124195  0.0119896
-## etn_herkomstWesterse_migratieachtergrond                 -0.0335450  0.0194004
-## etn_herkomstNiet_westerse_migratieachtergrond            -0.0555907  0.0351095
-## eduMiddel                                                -0.2706702  0.0142417
-## eduLaag                                                  -0.3429079  0.0276962
-## huisAlleenstaand_met_kinderen                            -0.0491597  0.0320393
-## huisSamenwonend_met_partner_met_thuiswonende_kinderen     0.0789938  0.0171777
-## huisSamenwonend_met_partner_zonder_thuiswonende_kinderen  0.0631212  0.0147032
-## huisAnders                                               -0.0252396  0.0277258
-## gezo                                                     -0.0658448  0.0033677
-## rond                                                     -0.0541131  0.0027213
-## medi                                                     -0.0294752  0.0102630
-## hulp                                                     -0.0042988  0.0003510
-## eenz                                                     -0.0662072  0.0044094
-## cont                                                      0.0118958  0.0026851
-## drei                                                      0.0678072  0.0029557
-## onvr                                                     -0.2429372  0.0032063
-## econ                                                     -0.1305535  0.0115146
-## ment                                                      0.0047724  0.0036360
-##                                                           t value
-## (Intercept)                                                91.367
-## meting_mnd                                               -136.575
-## age                                                        -5.862
-## sekseVrouw                                                 -1.036
-## etn_herkomstWesterse_migratieachtergrond                   -1.729
-## etn_herkomstNiet_westerse_migratieachtergrond              -1.583
-## eduMiddel                                                 -19.005
-## eduLaag                                                   -12.381
-## huisAlleenstaand_met_kinderen                              -1.534
-## huisSamenwonend_met_partner_met_thuiswonende_kinderen       4.599
-## huisSamenwonend_met_partner_zonder_thuiswonende_kinderen    4.293
-## huisAnders                                                 -0.910
-## gezo                                                      -19.552
-## rond                                                      -19.885
-## medi                                                       -2.872
-## hulp                                                      -12.247
-## eenz                                                      -15.015
-## cont                                                        4.430
-## drei                                                       22.941
-## onvr                                                      -75.769
-## econ                                                      -11.338
-## ment                                                        1.313</code></pre>
-<pre><code>## 
-## Correlation of fixed effects could have been required in summary()</code></pre>
-<pre><code>## 
-## Correlation of Fixed Effects:
-##                        (Intr) mtng_m age    sksVrw etn_W_ et_N__ edMddl eduLag
-## meting_mnd             -0.023                                                 
-## age                    -0.451 -0.034                                          
-## sekseVrouw             -0.134 -0.003  0.062                                   
-## etn_hrkmsW_            -0.015 -0.002 -0.038 -0.021                            
-## etn_hrkmN__            -0.044 -0.002  0.061 -0.008  0.058                     
-## eduMiddel               0.009  0.008 -0.106  0.022  0.069  0.036              
-## eduLaag                 0.025  0.006 -0.105  0.059  0.040  0.014  0.140       
-## hsAllnstn__            -0.089  0.001  0.039 -0.054 -0.010 -0.008 -0.012  0.000
-## hsSmnwnnd_mt_prtnr_m__ -0.276  0.001  0.201  0.094  0.015 -0.004 -0.009  0.028
-## hsSmnwnnd_mt_prtnr_z__ -0.162 -0.003 -0.088  0.086  0.021  0.024 -0.013  0.014
-## huisAnders             -0.233  0.001  0.318  0.045  0.002  0.006  0.003 -0.008
-## gezo                   -0.033  0.094 -0.061 -0.003 -0.002  0.001 -0.026 -0.022
-## rond                   -0.036  0.028  0.011 -0.007 -0.006 -0.003 -0.051 -0.046
-## medi                   -0.759 -0.002  0.003  0.000  0.000  0.001 -0.002 -0.001
-## hulp                   -0.021 -0.042 -0.009 -0.004 -0.001 -0.002 -0.001 -0.005
-## eenz                   -0.118  0.012  0.015  0.013  0.001  0.002 -0.020 -0.013
-## cont                   -0.059  0.020 -0.063  0.012 -0.001 -0.007 -0.009 -0.013
-## drei                   -0.083  0.076 -0.111  0.000 -0.006 -0.007 -0.003 -0.003
-## onvr                   -0.107 -0.232  0.007  0.019  0.001  0.000 -0.049 -0.038
-## econ                   -0.269  0.011  0.024  0.014 -0.036 -0.030 -0.014 -0.011
-## ment                   -0.073 -0.074  0.130 -0.034  0.004  0.014  0.012  0.008
-##                        hsAl__ hsSmnwnnd_mt_prtnr_m__ hsSmnwnnd_mt_prtnr_z__
-## meting_mnd                                                                 
-## age                                                                        
-## sekseVrouw                                                                 
-## etn_hrkmsW_                                                                
-## etn_hrkmN__                                                                
-## eduMiddel                                                                  
-## eduLaag                                                                    
-## hsAllnstn__                                                                
-## hsSmnwnnd_mt_prtnr_m__  0.247                                              
-## hsSmnwnnd_mt_prtnr_z__  0.275  0.526                                       
-## huisAnders              0.163  0.352                  0.301                
-## gezo                    0.002  0.009                  0.010                
-## rond                   -0.012  0.029                  0.054                
-## medi                    0.002  0.003                  0.002                
-## hulp                    0.000  0.001                  0.001                
-## eenz                    0.007  0.022                  0.024                
-## cont                    0.016  0.026                  0.003                
-## drei                    0.000 -0.003                 -0.014                
-## onvr                   -0.004  0.003                  0.012                
-## econ                   -0.015  0.056                  0.037                
-## ment                    0.003 -0.010                 -0.006                
-##                        hsAndr gezo   rond   medi   hulp   eenz   cont   drei  
-## meting_mnd                                                                    
-## age                                                                           
-## sekseVrouw                                                                    
-## etn_hrkmsW_                                                                   
-## etn_hrkmN__                                                                   
-## eduMiddel                                                                     
-## eduLaag                                                                       
-## hsAllnstn__                                                                   
-## hsSmnwnnd_mt_prtnr_m__                                                        
-## hsSmnwnnd_mt_prtnr_z__                                                        
-## huisAnders                                                                    
-## gezo                    0.002                                                 
-## rond                    0.020 -0.138                                          
-## medi                    0.001  0.006  0.003                                   
-## hulp                   -0.001 -0.009 -0.005 -0.002                            
-## eenz                    0.005 -0.115 -0.097  0.008 -0.012                     
-## cont                   -0.011 -0.001 -0.021 -0.018 -0.026 -0.165              
-## drei                   -0.001 -0.173 -0.034  0.000  0.036  0.012 -0.029       
-## onvr                    0.000  0.017 -0.110  0.003  0.021 -0.082 -0.023  0.218
-## econ                   -0.028  0.012 -0.063  0.002 -0.004 -0.014  0.001 -0.005
-## ment                   -0.009 -0.142 -0.044 -0.007  0.015 -0.176 -0.033 -0.213
-##                        onvr   econ  
-## meting_mnd                          
-## age                                 
-## sekseVrouw                          
-## etn_hrkmsW_                         
-## etn_hrkmN__                         
-## eduMiddel                           
-## eduLaag                             
-## hsAllnstn__                         
-## hsSmnwnnd_mt_prtnr_m__              
-## hsSmnwnnd_mt_prtnr_z__              
-## huisAnders                          
-## gezo                                
-## rond                                
-## medi                                
-## hulp                                
-## eenz                                
-## cont                                
-## drei                                
-## onvr                                
-## econ                   -0.025       
-## ment                   -0.149 -0.065</code></pre>
-<pre class="r"><code># Summary AIC
-fit %&gt;% map(~.x %&gt;% AIC()) %&gt;% unlist() %&gt;% summary()</code></pre>
-<pre><code>##    Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
-##  258292  258916  259247  260362  260495  266475</code></pre>
-<pre class="r"><code># Pooled imputations
+fit[[1]] %&gt;% summary() %&gt;% print(correlation = TRUE)
+# Summary AIC
+fit %&gt;% map(~.x %&gt;% AIC()) %&gt;% unlist() %&gt;% summary()
+# Pooled imputations
 fit %&gt;% 
   pool() %&gt;% 
-  broom.mixed::tidy()</code></pre>
-<pre><code>##                                                        term     estimate
-## 1                                               (Intercept)  5.098606930
-## 2                                                meting_mnd -0.046519395
-## 3                                                       age -0.005020256
-## 4                                                sekseVrouw -0.012951798
-## 5                  etn_herkomstWesterse_migratieachtergrond -0.030295551
-## 6             etn_herkomstNiet_westerse_migratieachtergrond -0.045859866
-## 7                                                 eduMiddel -0.271475820
-## 8                                                   eduLaag -0.350788430
-## 9                             huisAlleenstaand_met_kinderen -0.052389748
-## 10    huisSamenwonend_met_partner_met_thuiswonende_kinderen  0.079745095
-## 11 huisSamenwonend_met_partner_zonder_thuiswonende_kinderen  0.069128678
-## 12                                               huisAnders -0.021620443
-## 13                                                     gezo -0.066619790
-## 14                                                     rond -0.054964962
-## 15                                                     medi -0.031823851
-## 16                                                     hulp -0.004083426
-## 17                                                     eenz -0.058694974
-## 18                                                     cont  0.014661116
-## 19                                                     drei  0.060591886
-## 20                                                     onvr -0.237474387
-## 21                                                     econ -0.137228061
-## 22                                                     ment  0.005537618
-##       std.error   statistic      p.value            b         df  dfcom
-## 1  0.1664338029  30.6344435 3.990437e-12 2.260190e-02   11.16099 109931
-## 2  0.0013718672 -33.9095458 9.318836e-12 1.612098e-06   10.12115 109931
-## 3  0.0025272582  -1.9864438 7.655867e-02 5.641911e-06    9.50333 109931
-## 4  0.0122382391  -1.0583057 2.899572e-01 5.022850e-06 6224.68541 109931
-## 5  0.0208421919  -1.4535684 1.466646e-01 5.160897e-05  524.07335 109931
-## 6  0.0363364667  -1.2620893 2.070499e-01 7.579133e-05 2208.88344 109931
-## 7  0.0169937155 -15.9750715 1.200862e-29 7.751944e-05  103.08868 109931
-## 8  0.0318317227 -11.0200894 3.121794e-21 2.214522e-04  155.42779 109931
-## 9  0.0332351260  -1.5763367 1.151108e-01 6.764202e-05 1945.77141 109931
-## 10 0.0177002930   4.5052980 6.885363e-06 1.550129e-05 2952.09688 109931
-## 11 0.0161026312   4.2930051 2.308410e-05 3.848458e-05  336.41838 109931
-## 12 0.0296871890  -0.7282752 4.667415e-01 9.992564e-05  575.14298 109931
-## 13 0.0046909908 -14.2016461 3.030985e-16 1.004865e-05   35.64651 109931
-## 14 0.0046885756 -11.7231684 2.095143e-10 1.341369e-05   19.96568 109931
-## 15 0.0130127367  -2.4455925 1.767522e-02 6.210754e-05   55.24297 109931
-## 16 0.0005188456  -7.8702134 1.245064e-08 1.373775e-07   28.54445 109931
-## 17 0.0065842054  -8.9145113 9.417029e-10 2.209596e-05   28.61459 109931
-## 18 0.0062712501   2.3378300 3.552862e-02 2.931526e-05   13.37804 109931
-## 19 0.0073641430   8.2279616 1.950858e-06 4.152930e-05   12.67416 109931
-## 20 0.0119785731 -19.8249311 1.354587e-09 1.213160e-04   10.39092 109931
-## 21 0.0159873790  -8.5835246 2.068103e-10 1.133099e-04   37.82147 109931
-## 22 0.0057060568   0.9704808 3.412869e-01 1.793073e-05   24.51092 109931
-##           fmi     lambda  m         riv         ubar
-## 1  0.91201213 0.89754162 10  8.76006021 2.838119e-03
-## 2  0.95104098 0.94223631 10 16.31191360 1.087124e-07
-## 3  0.97620323 0.97167195 10 34.30069458 1.809322e-07
-## 4  0.03719899 0.03688969 10  0.03830266 1.442494e-04
-## 5  0.13398525 0.13068661 10  0.15033314 3.776271e-04
-## 6  0.06399034 0.06314323 10  0.06739902 1.236968e-03
-## 7  0.30856054 0.29527495 10  0.41899313 2.035150e-04
-## 8  0.24999900 0.24040990 10  0.31649952 7.696612e-04
-## 9  0.06831909 0.06736194 10  0.07222731 1.030167e-03
-## 10 0.05506511 0.05442515 10  0.05755774 2.962490e-04
-## 11 0.16819265 0.16326223 10  0.19511756 2.169617e-04
-## 12 0.12774657 0.12471867 10  0.14248981 7.714110e-04
-## 13 0.52806538 0.50230933 10  1.00928019 1.095188e-05
-## 14 0.69984430 0.67121124 10  2.04146655 7.227678e-06
-## 15 0.42394386 0.40345930 10  0.67633157 1.010130e-04
-## 16 0.58915925 0.56134755 10  1.27970913 1.180856e-07
-## 17 0.58845260 0.56065904 10  1.27613652 1.904620e-05
-## 18 0.84192167 0.81993281 10  4.55348250 7.081787e-06
-## 19 0.86248329 0.84236991 10  5.34396663 8.548375e-06
-## 20 0.94048710 0.93003792 10 13.29345758 1.003859e-05
-## 21 0.51274979 0.48764769 10  0.95178196 1.309553e-04
-## 22 0.63444389 0.60578510 10  1.53668746 1.283528e-05</code></pre>
-<pre class="r"><code>results_vert &lt;- mitml::testEstimates(as.mitml.result(fit), extra.pars = TRUE)
+  broom.mixed::tidy()
+results_vert &lt;- mitml::testEstimates(as.mitml.result(fit), extra.pars = TRUE)
 results_vert</code></pre>
-<pre><code>## 
-## Call:
-## 
-## mitml::testEstimates(model = as.mitml.result(fit), extra.pars = TRUE)
-## 
-## Final parameter estimates and inferences obtained from 10 imputed data sets.
-## 
-##                                                           Estimate Std.Error   t.value        df   P(&gt;|t|)       RIV       FMI 
-## (Intercept)                                                  5.099     0.166    30.634    11.172     0.000     8.760     0.912 
-## meting_mnd                                                  -0.047     0.001   -33.910    10.137     0.000    16.312     0.951 
-## age                                                         -0.005     0.003    -1.986     9.532     0.076    34.301     0.976 
-## sekseVrouw                                                  -0.013     0.012    -1.058  6613.517     0.290     0.038     0.037 
-## etn_herkomstWesterse_migratieachtergrond                    -0.030     0.021    -1.454   526.963     0.147     0.150     0.134 
-## etn_herkomstNiet_westerse_migratieachtergrond               -0.046     0.036    -1.262  2257.298     0.207     0.067     0.064 
-## eduMiddel                                                   -0.271     0.017   -15.975   103.226     0.000     0.419     0.309 
-## eduLaag                                                     -0.351     0.032   -11.020   155.718     0.000     0.316     0.250 
-## huisAlleenstaand_met_kinderen                               -0.052     0.033    -1.576  1983.414     0.115     0.072     0.068 
-## huisSamenwonend_met_partner_met_thuiswonende_kinderen        0.080     0.018     4.505  3038.388     0.000     0.058     0.055 
-## huisSamenwonend_met_partner_zonder_thuiswonende_kinderen     0.069     0.016     4.293   337.653     0.000     0.195     0.168 
-## huisAnders                                                  -0.022     0.030    -0.728   578.602     0.467     0.142     0.128 
-## gezo                                                        -0.067     0.005   -14.202    35.670     0.000     1.009     0.528 
-## rond                                                        -0.055     0.005   -11.723    19.977     0.000     2.041     0.700 
-## medi                                                        -0.032     0.013    -2.446    55.290     0.018     0.676     0.424 
-## hulp                                                        -0.004     0.001    -7.870    28.561     0.000     1.280     0.589 
-## eenz                                                        -0.059     0.007    -8.915    28.632     0.000     1.276     0.588 
-## cont                                                         0.015     0.006     2.338    13.387     0.036     4.553     0.842 
-## drei                                                         0.061     0.007     8.228    12.683     0.000     5.344     0.862 
-## onvr                                                        -0.237     0.012   -19.825    10.405     0.000    13.293     0.940 
-## econ                                                        -0.137     0.016    -8.584    37.847     0.000     0.952     0.513 
-## ment                                                         0.006     0.006     0.970    24.525     0.341     1.537     0.634 
-## 
-##                         Estimate 
-## Intercept~~Intercept|id    0.644 
-## Residual~~Residual         0.402 
-## ICC|id                     0.616 
-## 
-## Unadjusted hypothesis test as appropriate in larger samples.</code></pre>
 <hr />
 </div>
 </div>
@@ -2930,7 +2481,8 @@ results_vert</code></pre>
 <h1><span class="header-section-number">7</span> Weighted averages</h1>
 <hr />
 <p>Compute weighted averages per time point (Figuur 2).</p>
-<pre class="r"><code>imp_post$data %&gt;% 
+<pre class="r"><code>imp_post %&gt;% 
+  mice::complete(&quot;long&quot;) %&gt;% 
   group_by(meting_mnd) %&gt;% 
   summarise(vertrouwen = weighted.mean(q60_1, weegfactor, na.rm = TRUE),
             onvrede = weighted.mean(onvr, weegfactor, na.rm = TRUE),
@@ -2941,11 +2493,11 @@ results_vert</code></pre>
 <pre><code>## # A tibble: 5 × 6
 ##   meting_mnd vertrouwen onvrede dreiging rondkomen gezondheid
 ##        &lt;dbl&gt;      &lt;dbl&gt;   &lt;dbl&gt;    &lt;dbl&gt;     &lt;dbl&gt;      &lt;dbl&gt;
-## 1          0       3.77    2.00     3.29      2.35       2.64
-## 2          3       3.47    2.36     2.93      2.28       2.08
-## 3          7       3.39    2.48     3.17      2.34       2.12
-## 4         12       3.16    2.76     2.97      2.31       2.14
-## 5         17       2.63    2.60     2.70      2.34       2.18</code></pre>
+## 1          0       3.51    2.07     2.91      2.35       2.36
+## 2          3       3.43    2.36     2.92      2.35       2.16
+## 3          7       3.31    2.60     3.01      2.36       2.08
+## 4         12       3.04    2.80     2.87      2.34       2.08
+## 5         17       2.59    2.67     2.62      2.34       2.14</code></pre>
 </div>
 
 

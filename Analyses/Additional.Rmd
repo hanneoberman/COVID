@@ -312,12 +312,12 @@ ids <- dat_wide[n_mis < 4, "id"]
 Now we need to load the imputed data and select the cases with two or more measurements.
 ```{r}
 dat_remeasured <- long_subset[long_subset$id %in% ids$id, ]
-imp_post <- as.mids(dat_remeasured)
+imp_post2 <- as.mids(dat_remeasured)
 ```
 
 ## Analysis 1: Model with Time
-```{r }
-fit <- imp_post %>% 
+```{r, eval=FALSE}
+fit <- imp_post2 %>% 
   complete("all") %>% 
   map(~.x %$% lme4::lmer(q60_1 ~ meting_mnd +  (1|id))) 
 # First imputed set
@@ -337,8 +337,8 @@ results_vert
 
 
 ## Analysis 2: Model with time-independent predictors added
-```{r }
-fit <- imp_post %>% 
+```{r, eval=FALSE}
+fit <- imp_post2 %>% 
   complete("all") %>% 
   map(~.x %$% lme4::lmer(q60_1 ~ meting_mnd + age + sekse + etn_herkomst + edu + huis + (1|id))) 
 # First imputed set
@@ -356,8 +356,8 @@ results_vert
 ---
 
 ## Analysis 3: Model with time-dependent predictors added
-```{r }
-fit <- imp_post %>% 
+```{r, eval=FALSE}
+fit <- imp_post2 %>% 
   complete("all") %>% 
   map(~.x %$% lme4::lmer(q60_1 ~ meting_mnd + age + sekse + etn_herkomst + edu + huis + (1|id) + gezo + rond + medi + hulp + eenz + cont + drei + onvr + econ + ment)) 
 # First imputed set
@@ -382,7 +382,8 @@ results_vert
 Compute weighted averages per time point (Figuur 2).
 
 ```{r weighted}
-imp_post$data %>% 
+imp_post %>% 
+  mice::complete("long") %>% 
   group_by(meting_mnd) %>% 
   summarise(vertrouwen = weighted.mean(q60_1, weegfactor, na.rm = TRUE),
             onvrede = weighted.mean(onvr, weegfactor, na.rm = TRUE),
