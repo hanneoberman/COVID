@@ -61,6 +61,8 @@ library(broom.mixed)# tidy and glance models for mixed effects classes
 library(purrr)      # functional programming
 library(tidyr)      # functional programming
 library(DT)         # interactive tables
+library(hardhat)    # weighted tables
+library(weights)    # weighted chi square test
 ```
 
 ---
@@ -428,6 +430,7 @@ dat_remeasure_ind <- long_remeasure_indicator[long_remeasure_indicator$.imp == 0
 
 # opleiding
 table(dat_remeasure_ind$edu, dat_remeasure_ind$remeasured)
+prop.table(table(dat_remeasure_ind$edu, dat_remeasure_ind$remeasured))
 chisq.test(dat_remeasure_ind$edu, dat_remeasure_ind$remeasured) 
 # weighted
 hardhat::weighted_table(dat_remeasure_ind$edu, dat_remeasure_ind$remeasured, weights = dat_remeasure_ind$weegfactor, na_remove = FALSE)
@@ -435,6 +438,7 @@ weights::wtd.chi.sq(dat_remeasure_ind$edu, dat_remeasure_ind$remeasured, weight 
 
 # gender
 table(dat_remeasure_ind$sekse, dat_remeasure_ind$remeasured)
+prop.table(table(dat_remeasure_ind$sekse, dat_remeasure_ind$remeasured))
 chisq.test(dat_remeasure_ind$sekse, dat_remeasure_ind$remeasured)
 # weighted
 hardhat::weighted_table(dat_remeasure_ind$sekse, dat_remeasure_ind$remeasured, weights = dat_remeasure_ind$weegfactor, na_remove = FALSE)
