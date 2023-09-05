@@ -307,6 +307,7 @@ dat_wide <- imp$data %>%
 plot_pattern(dat_wide[, c("id", "q60_1m0", "q60_1m3", "q60_1m7", "q60_1m12", "q60_1m17")], square = FALSE)
 n_mis <- rowSums(is.na(dat_wide[, c("q60_1m0", "q60_1m3", "q60_1m7", "q60_1m12", "q60_1m17")]))
 ids <- dat_wide[n_mis < 4, "id"]
+save(ids, file = "../Data/remeasues_cases.Rdata")
 ```
 
 Now we need to load the imputed data and select the cases with two or more measurements.
@@ -393,3 +394,60 @@ imp_post %>%
             )
 ```
 
+---
+
+# Demographics re-measured cases
+
+---
+
+```{r demographics}
+set.seed(1)
+# load("../Data/remeasues_cases.Rdata")
+
+# add indicator for cases with more than once measurement
+long_remeasure_indicator <- imp_post %>% 
+  mice::complete("long", include = TRUE) %>%
+  mutate(remeasured = factor(id %in% ids$id, levels = c(TRUE, FALSE), labels = c(">1", "once")))
+
+# compute weighted averages split by the measurements indicator
+long_remeasure_indicator %>% 
+  group_by(remeasured) %>% 
+  summarise(leeftijd = weighted.mean(age, weegfactor, na.rm = TRUE),
+            gender_num = weighted.mean(as.numeric(sekse), weegfactor, na.rm = TRUE),
+            opleiding_num = weighted.mean(as.numeric(edu), weegfactor, na.rm = TRUE),
+            vertrouwen = weighted.mean(q60_1, weegfactor, na.rm = TRUE),
+            onvrede = weighted.mean(onvr, weegfactor, na.rm = TRUE),
+            dreiging = weighted.mean(drei, weegfactor, na.rm = TRUE),
+            rondkomen = weighted.mean(rond, weegfactor, na.rm = TRUE),
+            gezondheid = weighted.mean(gezo, weegfactor, na.rm = TRUE)
+            )
+
+# test differences in demographics for cases with one or more measurements
+# for clarity on the 'incomplete' data, because demographics are completely observed
+dat_remeasure_ind <- long_remeasure_indicator[long_remeasure_indicator$.imp == 0, ]
+
+# opleiding
+table(dat_remeasure_ind$edu, dat_remeasure_ind$remeasured)
+chisq.test(dat_remeasure_ind$edu, dat_remeasure_ind$remeasured) 
+# weighted
+hardhat::weighted_table(dat_remeasure_ind$edu, dat_remeasure_ind$remeasured, weights = dat_remeasure_ind$weegfactor, na_remove = FALSE)
+weights::wtd.chi.sq(dat_remeasure_ind$edu, dat_remeasure_ind$remeasured, weight = dat_remeasure_ind$weegfactor)
+
+# gender
+table(dat_remeasure_ind$sekse, dat_remeasure_ind$remeasured)
+chisq.test(dat_remeasure_ind$sekse, dat_remeasure_ind$remeasured)
+# weighted
+hardhat::weighted_table(dat_remeasure_ind$sekse, dat_remeasure_ind$remeasured, weights = dat_remeasure_ind$weegfactor, na_remove = FALSE)
+weights::wtd.chi.sq(dat_remeasure_ind$sekse, dat_remeasure_ind$remeasured, weight = dat_remeasure_ind$weegfactor)
+
+# leeftijd
+dat_remeasure_ind %>%
+  group_by(remeasured) %>%
+  summarise(leeftijd = mean(age))
+t.test(dat_remeasure_ind$age ~ dat_remeasure_ind$remeasured)
+# weighted
+dat_remeasure_ind %>%
+  group_by(remeasured) %>%
+  summarise(leeftijd = weighted.mean(age, weegfactor))
+summary(aov(age ~ remeasured, data = dat_remeasure_ind, weight = weegfactor))
+```
