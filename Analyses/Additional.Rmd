@@ -177,7 +177,7 @@ long_subset <- long %>%
 ## Convert back to imputation object
 ```{r }
 imp_post <- as.mids(long_subset)
-#save(imp_post, file = "./imputaties.RData")
+# save(imp_post, file = "../Data/imp_post.RData")
 ```
 
 
@@ -309,7 +309,7 @@ dat_wide <- imp$data %>%
 plot_pattern(dat_wide[, c("id", "q60_1m0", "q60_1m3", "q60_1m7", "q60_1m12", "q60_1m17")], square = FALSE)
 n_mis <- rowSums(is.na(dat_wide[, c("q60_1m0", "q60_1m3", "q60_1m7", "q60_1m12", "q60_1m17")]))
 ids <- dat_wide[n_mis < 4, "id"]
-save(ids, file = "../Data/remeasues_cases.Rdata")
+save(ids, file = "../Data/remeasured_cases.Rdata")
 ```
 
 Now we need to load the imputed data and select the cases with two or more measurements.
@@ -402,9 +402,11 @@ imp_post %>%
 
 ---
 
+Bereken de groepsgemiddelden voor participanten die een keer versus meermaal hebben deelgenomen.
+
 ```{r demographics}
 set.seed(1)
-# load("../Data/remeasues_cases.Rdata")
+# load("../Data/remeasured_cases.Rdata")
 
 # add indicator for cases with more than once measurement
 long_remeasure_indicator <- imp_post %>% 
@@ -432,26 +434,38 @@ dat_remeasure_ind <- long_remeasure_indicator[long_remeasure_indicator$.imp == 0
 table(dat_remeasure_ind$edu, dat_remeasure_ind$remeasured)
 prop.table(table(dat_remeasure_ind$edu, dat_remeasure_ind$remeasured))
 chisq.test(dat_remeasure_ind$edu, dat_remeasure_ind$remeasured) 
-# weighted
-hardhat::weighted_table(dat_remeasure_ind$edu, dat_remeasure_ind$remeasured, weights = dat_remeasure_ind$weegfactor, na_remove = FALSE)
-weights::wtd.chi.sq(dat_remeasure_ind$edu, dat_remeasure_ind$remeasured, weight = dat_remeasure_ind$weegfactor)
 
 # gender
 table(dat_remeasure_ind$sekse, dat_remeasure_ind$remeasured)
-prop.table(table(dat_remeasure_ind$sekse, dat_remeasure_ind$remeasured))
+prop.table(table(dat_remeasure_ind$sekse, dat_remeasure_ind$remeasured), margin = 2) %>% round(., 2)
 chisq.test(dat_remeasure_ind$sekse, dat_remeasure_ind$remeasured)
-# weighted
-hardhat::weighted_table(dat_remeasure_ind$sekse, dat_remeasure_ind$remeasured, weights = dat_remeasure_ind$weegfactor, na_remove = FALSE)
-weights::wtd.chi.sq(dat_remeasure_ind$sekse, dat_remeasure_ind$remeasured, weight = dat_remeasure_ind$weegfactor)
 
 # leeftijd
 dat_remeasure_ind %>%
   group_by(remeasured) %>%
   summarise(leeftijd = mean(age))
 t.test(dat_remeasure_ind$age ~ dat_remeasure_ind$remeasured)
-# weighted
+
+```
+
+Bereken de groepsgemiddelden voor participanten die één keer hebben deelgenomen versus participanten die meermaals gemeten zijn, gewogen naar 'weegfactor'.
+
+```{r weighted_demo}
+# leeftijd gewogen
 dat_remeasure_ind %>%
   group_by(remeasured) %>%
-  summarise(leeftijd = weighted.mean(age, weegfactor))
+  summarise(leeftijd = weighted.mean(age, weegfactor)) %>% 
+  t() 
 summary(aov(age ~ remeasured, data = dat_remeasure_ind, weight = weegfactor))
+
+# opleiding gewogen
+hardhat::weighted_table(dat_remeasure_ind$edu, dat_remeasure_ind$remeasured, weights = dat_remeasure_ind$weegfactor, na_remove = FALSE)
+prop.table(hardhat::weighted_table(dat_remeasure_ind$edu, dat_remeasure_ind$remeasured, weights = dat_remeasure_ind$weegfactor, na_remove = FALSE), margin = 2) %>% round(., 2)
+weights::wtd.chi.sq(dat_remeasure_ind$edu, dat_remeasure_ind$remeasured, weight = dat_remeasure_ind$weegfactor)
+
+# gender gewogen
+hardhat::weighted_table(dat_remeasure_ind$sekse, dat_remeasure_ind$remeasured, weights = dat_remeasure_ind$weegfactor, na_remove = FALSE)
+prop.table(hardhat::weighted_table(dat_remeasure_ind$sekse, dat_remeasure_ind$remeasured, weights = dat_remeasure_ind$weegfactor, na_remove = FALSE), margin = 2) %>% round(., 2)
+weights::wtd.chi.sq(dat_remeasure_ind$sekse, dat_remeasure_ind$remeasured, weight = dat_remeasure_ind$weegfactor)
 ```
+
