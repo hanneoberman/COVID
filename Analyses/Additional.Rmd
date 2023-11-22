@@ -1,0 +1,471 @@
+---
+title: "Analyse COVID data"
+author: "Hanne Oberman"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    toc: true
+    toc_depth: 5
+    toc_float: true
+    number_sections: true
+---
+
+<style type="text/css">
+
+body{ /* Normal  */
+      font-size: 12px;
+  }
+td {  /* Table  */
+  font-size: 12px;
+}
+h1.title {
+  font-size: 20px;
+  color: DarkBlue;
+}
+h1 { /* Header 1 */
+  font-size: 18px;
+}
+h2 { /* Header 2 */
+    font-size: 16px;
+}
+h3 { /* Header 3 */
+  font-size: 14px;
+}
+code.r{ /* Code block */
+    font-size: 12px;
+}
+pre { /* Code block - determines code spacing between lines */
+    font-size: 12px;
+}
+</style>
+
+---
+
+# Packages and functions used
+```{r setup, include=TRUE, message=FALSE, warning=TRUE}
+# set random number generator
+set.seed(11)
+
+# setup environment
+library(haven)      # For importing SPSS data
+library(readxl)     # For reading excel files
+library(plyr)       # Data wrangling
+library(dplyr)      # Data wrangling improved
+library(mice)       # For incomplete data analysis
+library(miceadds)   # Additions to mice
+library(ggmice)     # Plotting device for mice
+library(lme4)       # Linear mixed-effect modeling
+library(magrittr)   # Pipes in R
+library(lme4)       # linear mixed effects models
+library(broom.mixed)# tidy and glance models for mixed effects classes
+library(purrr)      # functional programming
+library(tidyr)      # functional programming
+library(DT)         # interactive tables
+library(hardhat)    # weighted tables
+library(weights)    # weighted chi square test
+```
+
+---
+
+# Read in the incomplete data
+
+Import the imputed data.
+```{r}
+imp <- readRDS("../Data/imp_20it.RDS")
+long <- mice::complete(imp, "long", include = TRUE)
+```
+
+Import the incomplete data to match the weights in the `weegfactor` variable.
+```{r}
+load("../Data/clean.Rdata")
+```
+
+Add weights to the imputed data.
+```{r}
+long <- left_join(long, unique(dat_clean[, c("id", "weegfactor")]), by= "id")
+```
+
+
+Load relevant variables.
+```{r variables}
+vars_outcome <- c("q60_1", "q49_1", "q49_2", "q49_3", "q49_4", "q49_5", "q49_6")
+vars_fixed <- c("weegfactor", "edu", "age", "q29", "q52", "q53", "q54", "sekse", "etn_herkomst")
+vars_random <- c("meting_mnd", "meting_squared", "q43", "q48_1", "q48_9", "q48_10", "q48_11", "q48_12", "q47_1", "q47_2", "q47_3", "q33_1", "q33_2", "q33_3", "q33_4", "q33_5", "q33_6")
+vars_covariates <- c("q34_1", "q34_2", "q34_3", "q34_4", "q34_5", "q38_1", "q38_2", "q38_3", "q38_4", "q31_1", "q31_2", "q31_3", "q31_4", "q31_5", "q31_6", "q31_7", "q59", "q60_2", "q60_3", "q60_4", "q60_8", "q60_10", "q60_12")
+vars_analyse <- c("id", vars_fixed, vars_outcome, vars_random)
+```
+
+
+# Post-processing the variables
+
+Label factor levels. See Analysis.Rdm for details.
+```{r}
+# Merge small categories
+long$q29[long$q29 == 6] <- 5
+long$q29[long$q29 == 7] <- 5
+long$edu[long$edu < 4] <- 1
+long$edu[long$edu == 4 | long$edu == 5] <- 2
+long$edu[long$edu > 5] <- 3
+# Recode variables
+long <- long %>% mutate(
+  q29 = as.factor(q29),
+  edu = as.factor(edu),
+  sekse = as.factor(sekse),
+  etn_herkomst = as.factor(etn_herkomst),
+  age = 2020-geboortejaar
+)
+# Label factors
+levels(long$q29)<- c("Alleenstaand_zonder-kinderen", 
+                     "Alleenstaand_met_kinderen", 
+                     "Samenwonend_met_partner_met_thuiswonende_kinderen",
+                     "Samenwonend_met_partner_zonder_thuiswonende_kinderen", 
+                     "Anders")
+levels(long$edu)<- c("Hoog", "Middel", "Laag")
+levels(long$etn_herkomst)<- c("Nederlandse_achtergrond", 
+                              "Westerse_migratieachtergrond", 
+                              "Niet_westerse_migratieachtergrond")
+levels(long$sekse) <- c("Man", "Vrouw")
+
+```
+
+
+Combine items of scale contructs into variables.
+```{r}
+long <- long %>% 
+  mutate(ment = rowMeans(select(., q49_1, q49_2, q49_3, q49_4, q49_5, q49_6), na.rm=TRUE), #mentale gevolgen
+         econ = rowMeans(select(., q52, q53, q54), na.rm=TRUE),  #economische
+         onvr = rowMeans(select(., q48_1, q48_9, q48_10,  q48_11, q48_12), na.rm=TRUE), #onvrede met beleid
+         drei = rowMeans(select(., q47_1, q47_2, q47_3), na.rm=TRUE), #dreiging ervaren
+         cont = rowMeans(select(., q33_1, q33_2, q33_3,  q33_4, q33_5, q33_6), na.rm=TRUE),  #sociaal contact
+         eenz = rowMeans(select(., q34_1, q34_2, q34_3,  q34_4, q34_5), na.rm=TRUE), #eenzaamheid
+         hulp = rowMeans(select(., q38_1, q38_2, q38_3,  q38_4), na.rm=TRUE), #hulp ontvangen
+         medi = rowMeans(select(., q31_1, q31_2, q31_3,  q31_4, q31_5, q31_6, q31_7), na.rm=TRUE), #mediagebruik
+         rond = q59, #rondkomen
+         gezo = q43, #gezondheid
+         huis = q29) #huishouden
+long[sapply(long, is.nan)] <- NA 
+```
+
+Subset of columns.
+```{r}
+long_subset <- long %>% 
+  select(.imp,
+         .id,
+         id, 
+         meting_mnd, 
+         meting_squared, 
+         weegfactor,
+         edu, 
+         age, 
+         sekse, 
+         etn_herkomst, 
+         ment, 
+         econ, 
+         onvr, 
+         drei, 
+         cont, 
+         eenz, 
+         hulp, 
+         medi, 
+         rond, 
+         gezo,
+         q60_1,
+         huis
+         )
+```
+
+## Convert back to imputation object
+```{r }
+imp_post <- as.mids(long_subset)
+# save(imp_post, file = "../Data/imp_post.RData")
+```
+
+
+---
+
+# Weighted analysis
+
+---
+
+Re-run the analyses weighted by `weegfactor`.
+
+## Analysis 1: Model with Time
+```{r}
+fit <- imp_post %>% 
+  complete("all") %>% 
+  map(~.x %$% lme4::lmer(q60_1 ~ meting_mnd +  (1|id), weights = .x$weegfactor)) 
+# First imputed set
+fit[[1]] %>% summary() %>% print(correlation = TRUE)
+# Summary AIC
+fit %>% map(~.x %>% AIC()) %>% unlist() %>% summary()
+# Pooled imputations
+fit %>% 
+  pool() %>% 
+  broom.mixed::tidy()
+results_vert <- mitml::testEstimates(as.mitml.result(fit), extra.pars = TRUE)
+results_vert
+```
+
+
+---
+
+
+## Analysis 2: Model with time-independent predictors added
+```{r }
+fit <- imp_post %>% 
+  complete("all") %>% 
+  map(~.x %$% lme4::lmer(q60_1 ~ meting_mnd + age + sekse + etn_herkomst + edu + huis + (1|id), weights = .x$weegfactor)) 
+# First imputed set
+fit[[1]] %>% summary() %>% print(correlation = TRUE)
+# Summary AIC
+fit %>% map(~.x %>% AIC()) %>% unlist() %>% summary()
+# Pooled imputations
+fit %>% 
+  pool() %>% 
+  broom.mixed::tidy()
+results_vert <- mitml::testEstimates(as.mitml.result(fit), extra.pars = TRUE)
+results_vert
+```
+
+---
+
+## Analysis 3: Model with time-dependent predictors added
+```{r }
+fit <- imp_post %>% 
+  complete("all") %>% 
+  map(~.x %$% lme4::lmer(q60_1 ~ meting_mnd + age + sekse + etn_herkomst + edu + huis + (1|id) + gezo + rond + drei + onvr), weights = .x$weegfactor) 
+# First imputed set
+fit[[1]] %>% summary() %>% print(correlation = TRUE)
+# Summary AIC
+fit %>% map(~.x %>% AIC()) %>% unlist() %>% summary()
+# Pooled imputations
+fit %>% 
+  pool() %>% 
+  broom.mixed::tidy()
+results_vert <- mitml::testEstimates(as.mitml.result(fit), extra.pars = TRUE)
+results_vert
+```
+
+---
+
+## Analysis 4: Model with random effects for time added
+```{r}
+fit <- imp_post %>% 
+  complete("all") %>% 
+  map(~.x %$% lme4::lmer(q60_1 ~ meting_mnd + age + sekse + etn_herkomst + edu + huis + (1 + meting_mnd | id) + gezo + rond + drei + onvr), weights = .x$weegfactor) 
+# First imputed set
+fit[[1]] %>% summary() %>% print(correlation = TRUE)
+# Summary AIC
+fit %>% map(~.x %>% AIC()) %>% unlist() %>% summary()
+# Pooled imputations
+fit %>% 
+  pool() %>% 
+  broom.mixed::tidy()
+results_vert <- mitml::testEstimates(as.mitml.result(fit), extra.pars = TRUE)
+results_vert
+```
+
+---
+
+# Complete case analysis
+
+---
+
+
+Select rows for complete case analysis.
+```{r}
+complete_cases <- long_subset[rowSums(is.na(long_subset)) == 0 & long_subset$.imp == 0, ]
+```
+
+
+
+Intercept-only model
+```{r}
+fit <- lme4::lmer(q60_1 ~ (1|id), complete_cases)
+broom.mixed::tidy(fit)
+```
+
+```{r}
+fit <- lme4::lmer(q60_1 ~ meting_mnd +  (1|id), complete_cases)
+broom.mixed::tidy(fit)
+```
+
+```{r}
+fit <- lme4::lmer(q60_1 ~ meting_mnd + age + sekse + etn_herkomst + edu + huis + (1|id), complete_cases)
+broom.mixed::tidy(fit)
+```
+
+---
+
+# Re-measured cases
+
+---
+
+The following code converts the data into 'wide format', where each row represents one respondent, and time-varying variables are repeated measurements over several columns. This allows us to evaluate the missing data pattern in the outcome variable (q60_1) over the time in months (q60_1m0 through q60_1m17).
+
+```{r wide}
+dat_wide <- imp$data %>% 
+  pivot_wider(id_cols = all_of("id"), values_from = c(vars_outcome, vars_random, vars_covariates), names_from = "meting_mnd", names_sep = "m")
+plot_pattern(dat_wide[, c("id", "q60_1m0", "q60_1m3", "q60_1m7", "q60_1m12", "q60_1m17")], square = FALSE)
+n_mis <- rowSums(is.na(dat_wide[, c("q60_1m0", "q60_1m3", "q60_1m7", "q60_1m12", "q60_1m17")]))
+ids <- dat_wide[n_mis < 4, "id"]
+save(ids, file = "../Data/remeasured_cases.Rdata")
+```
+
+Now we need to load the imputed data and select the cases with two or more measurements.
+```{r}
+dat_remeasured <- long_subset[long_subset$id %in% ids$id, ]
+imp_post2 <- as.mids(dat_remeasured)
+```
+
+## Analysis 1: Model with Time
+```{r, eval=FALSE}
+fit <- imp_post2 %>% 
+  complete("all") %>% 
+  map(~.x %$% lme4::lmer(q60_1 ~ meting_mnd +  (1|id))) 
+# First imputed set
+fit[[1]] %>% summary() %>% print(correlation = TRUE)
+# Summary AIC
+fit %>% map(~.x %>% AIC()) %>% unlist() %>% summary()
+# Pooled imputations
+fit %>% 
+  pool() %>% 
+  broom.mixed::tidy()
+results_vert <- mitml::testEstimates(as.mitml.result(fit), extra.pars = TRUE)
+results_vert
+```
+
+
+---
+
+
+## Analysis 2: Model with time-independent predictors added
+```{r, eval=FALSE}
+fit <- imp_post2 %>% 
+  complete("all") %>% 
+  map(~.x %$% lme4::lmer(q60_1 ~ meting_mnd + age + sekse + etn_herkomst + edu + huis + (1|id))) 
+# First imputed set
+fit[[1]] %>% summary() %>% print(correlation = TRUE)
+# Summary AIC
+fit %>% map(~.x %>% AIC()) %>% unlist() %>% summary()
+# Pooled imputations
+fit %>% 
+  pool() %>% 
+  broom.mixed::tidy()
+results_vert <- mitml::testEstimates(as.mitml.result(fit), extra.pars = TRUE)
+results_vert
+```
+
+---
+
+## Analysis 3: Model with time-dependent predictors added
+```{r, eval=FALSE}
+fit <- imp_post2 %>% 
+  complete("all") %>% 
+  map(~.x %$% lme4::lmer(q60_1 ~ meting_mnd + age + sekse + etn_herkomst + edu + huis + (1|id) + gezo + rond + medi + hulp + eenz + cont + drei + onvr + econ + ment)) 
+# First imputed set
+fit[[1]] %>% summary() %>% print(correlation = TRUE)
+# Summary AIC
+fit %>% map(~.x %>% AIC()) %>% unlist() %>% summary()
+# Pooled imputations
+fit %>% 
+  pool() %>% 
+  broom.mixed::tidy()
+results_vert <- mitml::testEstimates(as.mitml.result(fit), extra.pars = TRUE)
+results_vert
+```
+
+
+---
+
+# Weighted averages
+
+---
+
+Compute weighted averages per time point (Figuur 2).
+
+```{r weighted}
+imp_post %>% 
+  mice::complete("long") %>% 
+  group_by(meting_mnd) %>% 
+  summarise(vertrouwen = weighted.mean(q60_1, weegfactor, na.rm = TRUE),
+            onvrede = weighted.mean(onvr, weegfactor, na.rm = TRUE),
+            dreiging = weighted.mean(drei, weegfactor, na.rm = TRUE),
+            rondkomen = weighted.mean(rond, weegfactor, na.rm = TRUE),
+            gezondheid = weighted.mean(gezo, weegfactor, na.rm = TRUE)
+            )
+```
+
+---
+
+# Demographics re-measured cases
+
+---
+
+Bereken de groepsgemiddelden voor participanten die een keer versus meermaal hebben deelgenomen.
+
+```{r demographics}
+set.seed(1)
+# load("../Data/remeasured_cases.Rdata")
+
+# add indicator for cases with more than once measurement
+long_remeasure_indicator <- imp_post %>% 
+  mice::complete("long", include = TRUE) %>%
+  mutate(remeasured = factor(id %in% ids$id, levels = c(TRUE, FALSE), labels = c(">1", "once")))
+
+# compute weighted averages split by the measurements indicator
+long_remeasure_indicator %>% 
+  group_by(remeasured) %>% 
+  summarise(leeftijd = weighted.mean(age, weegfactor, na.rm = TRUE),
+            gender_num = weighted.mean(as.numeric(sekse), weegfactor, na.rm = TRUE),
+            opleiding_num = weighted.mean(as.numeric(edu), weegfactor, na.rm = TRUE),
+            vertrouwen = weighted.mean(q60_1, weegfactor, na.rm = TRUE),
+            onvrede = weighted.mean(onvr, weegfactor, na.rm = TRUE),
+            dreiging = weighted.mean(drei, weegfactor, na.rm = TRUE),
+            rondkomen = weighted.mean(rond, weegfactor, na.rm = TRUE),
+            gezondheid = weighted.mean(gezo, weegfactor, na.rm = TRUE)
+            )
+
+# test differences in demographics for cases with one or more measurements
+# for clarity on the 'incomplete' data, because demographics are completely observed
+dat_remeasure_ind <- long_remeasure_indicator[long_remeasure_indicator$.imp == 0, ]
+
+# opleiding
+table(dat_remeasure_ind$edu, dat_remeasure_ind$remeasured)
+prop.table(table(dat_remeasure_ind$edu, dat_remeasure_ind$remeasured))
+chisq.test(dat_remeasure_ind$edu, dat_remeasure_ind$remeasured) 
+
+# gender
+table(dat_remeasure_ind$sekse, dat_remeasure_ind$remeasured)
+prop.table(table(dat_remeasure_ind$sekse, dat_remeasure_ind$remeasured), margin = 2) %>% round(., 2)
+chisq.test(dat_remeasure_ind$sekse, dat_remeasure_ind$remeasured)
+
+# leeftijd
+dat_remeasure_ind %>%
+  group_by(remeasured) %>%
+  summarise(leeftijd = mean(age))
+t.test(dat_remeasure_ind$age ~ dat_remeasure_ind$remeasured)
+
+```
+
+Bereken de groepsgemiddelden voor participanten die één keer hebben deelgenomen versus participanten die meermaals gemeten zijn, gewogen naar 'weegfactor'.
+
+```{r weighted_demo}
+# leeftijd gewogen
+dat_remeasure_ind %>%
+  group_by(remeasured) %>%
+  summarise(leeftijd = weighted.mean(age, weegfactor)) %>% 
+  t() 
+summary(aov(age ~ remeasured, data = dat_remeasure_ind, weight = weegfactor))
+
+# opleiding gewogen
+hardhat::weighted_table(dat_remeasure_ind$edu, dat_remeasure_ind$remeasured, weights = dat_remeasure_ind$weegfactor, na_remove = FALSE)
+prop.table(hardhat::weighted_table(dat_remeasure_ind$edu, dat_remeasure_ind$remeasured, weights = dat_remeasure_ind$weegfactor, na_remove = FALSE), margin = 2) %>% round(., 2)
+weights::wtd.chi.sq(dat_remeasure_ind$edu, dat_remeasure_ind$remeasured, weight = dat_remeasure_ind$weegfactor)
+
+# gender gewogen
+hardhat::weighted_table(dat_remeasure_ind$sekse, dat_remeasure_ind$remeasured, weights = dat_remeasure_ind$weegfactor, na_remove = FALSE)
+prop.table(hardhat::weighted_table(dat_remeasure_ind$sekse, dat_remeasure_ind$remeasured, weights = dat_remeasure_ind$weegfactor, na_remove = FALSE), margin = 2) %>% round(., 2)
+weights::wtd.chi.sq(dat_remeasure_ind$sekse, dat_remeasure_ind$remeasured, weight = dat_remeasure_ind$weegfactor)
+```
+
