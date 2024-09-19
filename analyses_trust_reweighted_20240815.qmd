@@ -1,0 +1,550 @@
+---
+title: "Analyses trust in the government during the COVID-19 pandemic"
+author: "Hanne Oberman"
+format: html
+toc: true
+self-contained: true
+execute: 
+  cache: true
+---
+
+
+# Data wrangling
+
+Load the required files, functions and libraries.
+
+```{r setup, cache=FALSE, message=FALSE, warning=FALSE}
+library(knitr)
+knitr::opts_chunk$set(cache = TRUE, warning = FALSE, 
+                      message = FALSE, cache.lazy = FALSE)
+
+set.seed(2024)
+library(haven)
+library(dplyr)
+library(mice)
+library(purrr)
+library(tidyr)
+library(magrittr)
+library(lme4)
+
+# functilme4# function to compute the mode of a vector
+modus <- function(x) {
+  tally <- table(x, useNA = "no")
+  if (dim(tally) == 0) {
+    mode <- NA
+  } else {
+    mode <- names(which.max(tally))
+  }
+  return(as.numeric(mode))
+}
+
+# function to compute the mode of several columns
+modus_per_column <- function(x) {
+  apply(x, 2, modus)
+}
+```
+
+Load the raw data.
+```{r raw}
+dat_raw <- read_sav("./Data/Alle metingen_lang bestand_REWEIGHTED_toshare_240814.sav")
+
+```
+
+To select only cases with 2 or more measurements, should save the IDs of these cases.
+
+```{r cases}
+ids_to_keep <- dat_raw[dat_raw$gewogen == "ja", "id"]
+dat_reweighted <- dat_raw
+```
+
+
+Clean up variable names.
+
+```{r names}
+dat_renamed <- janitor::clean_names(dat_reweighted) 
+dat_renamed[] <- lapply(dat_renamed, as.vector)
+dat_renamed$weegfactor <- dat_renamed$nieuwe_weegfactor
+```
+
+Convert measurement occasion to time in months.
+
+```{r time}
+dat_time <- mutate(dat_renamed,
+    meting_mnd = recode_factor(
+      meting,
+      `1` = "0",
+      `2` = "3",
+      `3` = "7",
+      `4` = "12",
+      `5` = "17"
+    ) |>
+      as.character() |> as.numeric(),
+    meting_squared = meting_mnd * meting_mnd
+  )
+```
+
+Combine the two health status questions into a single variable.
+
+```{r health}
+dat_time$q43 <- rowMeans(data.frame(dat_time$q43_wave1, dat_time$q43_wave2tot5), na.rm = TRUE) 
+dat_time[sapply(dat_time, is.nan)] <- NA 
+```
+
+Demographic variables are assumed to be fixed over measurement occasions within respondents. Therefore, we can fill in missing demographics based on observed measurements. The following code takes the most frequent observation per participant across measurement occasions for variables that are assumed constant in the analysis model, and fills this value in for all measurement occasions.
+
+```{r constants}
+# calculate mode for constant variables
+modi <-
+  split(dat_time[, c(
+    "id",
+    "weegfactor",
+    "edu",
+    "geboortejaar",
+    "q29",
+    "q52",
+    "q53",
+    "q54",
+    "sekse",
+    "etn_herkomst"
+  )], factor(dat_time$id)) |>
+  purrr::map_dfr( ~ modus_per_column(.x)) |>
+  mutate(across(everything(), ~ as.numeric(.x)),
+         id = as.numeric(id))
+# combine constants with the time-varying data
+dat_demo <-
+  dat_time[, !(names(dat_time) %in% c(
+    "weegfactor",
+    "edu",
+    "geboortejaar",
+    "q29",
+    "q52",
+    "q53",
+    "q54",
+    "sekse",
+    "etn_herkomst"
+  ))] |>
+  left_join(modi, by = "id")
+```
+
+
+Combine smaller household categories into one 'other'.
+```{r household}
+dat_demo$q29[dat_demo$q29 == 6] <- 5
+dat_demo$q29[dat_demo$q29 == 7] <- 5
+dat_demo <- dat_demo %>% mutate(
+  q29 = as.factor(q29)
+)
+levels(dat_demo$q29) <- c("Alleenstaand_zonder-kinderen", 
+                     "Alleenstaand_met_kinderen", 
+                     "Samenwonend_met_partner_met_thuiswonende_kinderen",
+                     "Samenwonend_met_partner_zonder_thuiswonende_kinderen", 
+                     "Anders")
+```
+
+Combine education levels into three names categories.
+```{r edu}
+dat_demo$edu[dat_demo$edu < 4] <- 1
+dat_demo$edu[dat_demo$edu == 4 | dat_demo$edu == 5] <- 2
+dat_demo$edu[dat_demo$edu > 5] <- 3
+dat_demo <- dat_demo %>% mutate(
+  edu = as.factor(edu)
+)
+levels(dat_demo$edu) <- c("Hoog", "Middel", "Laag")
+```
+
+Label factor levels for sex and ethnic background.
+```{r sex}
+dat_demo$sekse <- as.factor(dat_demo$sekse)
+levels(dat_demo$sekse) <- c("Man", "Vrouw")
+dat_demo$etn_herkomst <- as.factor(dat_demo$etn_herkomst)
+levels(dat_demo$etn_herkomst) <- c("NL", 
+                              "migratie_westers", 
+                              "migratie_niet_westers")
+```
+
+Compute age at time point 1.
+```{r age}
+dat_demo <- dat_demo %>% mutate(
+  age = 2020 - geboortejaar
+)
+```
+
+Group relevant variables together for further analysis.
+```{r variables}
+vars_outcome <- c("q60_1")
+vars_fixed <- c("weegfactor", "edu", "age", "q29", "q52", "q53", "q54", "sekse", "etn_herkomst")
+vars_random <- c("meting_mnd", "meting_squared", "q43", "q48_1", "q48_9", "q48_10", "q48_11", "q48_12", "q47_1", "q47_2", "q47_3", "q33_1", "q33_2", "q33_3", "q33_4", "q33_5", "q33_6", "q49_1", "q49_2", "q49_3", "q49_4", "q49_5", "q49_6")
+vars_covariates <- c("q34_1", "q34_2", "q34_3", "q34_4", "q34_5", "q38_1", "q38_2", "q38_3", "q38_4", "q31_1", "q31_2", "q31_3", "q31_4", "q31_5", "q31_6", "q31_7", "q59", "q60_2", "q60_3", "q60_4", "q60_8", "q60_10", "q60_12")
+vars_vary <- c(vars_outcome, vars_random, vars_covariates)
+# vars_vary <- vars_vary[!(vars_vary == "meting_mnd" | vars_vary == "meting_squared")]
+vars_analyse <- c("id", vars_fixed, vars_outcome, vars_random)
+```
+
+Filter the relevant variables.
+```{r filter}
+dat_clean <- dat_demo[c(vars_analyse, vars_covariates)] # select the analysis variables and covariates
+```
+
+Save the data.
+```{r clean}
+save(dat_clean, file = "../Data/clean.Rdata")
+```
+
+Clean up environment.
+```{r env}
+rm(list = c("dat_demo", "dat_raw", "dat_renamed", "dat_reweighted", "dat_time"))
+gc()
+```
+
+
+# Imputation
+
+Convert data to wide format for imputation.
+```{r wide}
+dat_wide <- tidyr::pivot_wider(
+  dat_clean,
+  names_from = meting_mnd,
+  values_from = all_of(vars_vary),
+  names_sep = "."
+)
+```
+
+Collect variable names for easier referral in imputation models.
+```{r colnames}
+cols_meting <- select(dat_wide, starts_with("meting")) |> names()
+cols_outcome <- select(dat_wide, starts_with("q60")) |> names()
+cols_covariates <- select(dat_wide, starts_with(c("q34_1", "q34_2", "q34_3", "q34_4", "q34_5", "q38_1", "q38_2", "q38_3", "q38_4", "q31_1", "q31_2", "q31_3", "q31_4", "q31_5", "q31_6", "q31_7", "q59", "q60_2", "q60_3", "q60_4", "q60_8", "q60_10", "q60_12"))) |> names()
+```
+
+Create methods vector.
+
+```{r meth}
+meth <- make.method(dat_wide)
+meth[cols_meting] <- "sample"
+meth[cols_covariates] <- "norm"
+```
+
+Create predictor matrix.
+
+```{r pred}
+pred <- quickpred(dat_wide, mincor = 0.2, minpuc = 0.05)
+pred[, cols_covariates] <- 0
+pred[, cols_meting] <- 0
+pred[, cols_outcome] <- 1
+diag(pred) <- 0
+rowSums(pred)
+```
+
+Impute missing values.
+```{r imp, cache=TRUE}
+imp <- mice(dat_wide, method = meth, predictorMatrix = pred, m = 10, maxit = 10, seed = 2024)
+```
+
+Inspect imputed data.
+
+```{r trace}
+ggmice::plot_trace(imp, "q60_1.0")
+```
+
+Save the imputed data.
+
+```{r save_imp}
+save(imp, file = "../Data/imp_20240917.Rdata")
+```
+
+Convert the imputations to long form for post-processing.
+```{r mice_longer}
+imp_long <- complete(imp, "long", include = TRUE)
+```
+
+Check if all NAs are imputed.
+```{r nas}
+colSums(is.na(filter(imp_long, .imp != 0)))
+
+```
+
+There are a few columns not imputed: these are constants. We can fill them in with deductively for the measurement occasions.
+```{r imp_time}
+imp_long$meting_mnd.0[is.na(imp_long$meting_mnd.0)] <- 0 
+imp_long$meting_mnd.3[is.na(imp_long$meting_mnd.3)] <- 3 
+imp_long$meting_mnd.7[is.na(imp_long$meting_mnd.7)] <- 7 
+imp_long$meting_mnd.12[is.na(imp_long$meting_mnd.12)] <- 12
+imp_long$meting_mnd.17[is.na(imp_long$meting_mnd.17)] <- 17
+imp_long$meting_squared.0[is.na(imp_long$meting_squared.0)] <- 0
+imp_long$meting_squared.3[is.na(imp_long$meting_squared.3)] <- 9
+imp_long$meting_squared.7[is.na(imp_long$meting_squared.7)] <- 49
+imp_long$meting_squared.12[is.na(imp_long$meting_squared.12)] <- 144
+imp_long$meting_squared.17[is.na(imp_long$meting_squared.17)] <- 289
+```
+
+
+
+
+```{r pivot_longer}
+imp_longer <-  tidyr::pivot_longer(imp_long,
+    cols = matches("\\.0$|\\.3$|\\.7$|\\.12$|\\.17$"),
+    names_to = c(".value", "indicator"),
+    names_pattern = "(.*)\\.(0|3|7|12|17)"
+  )
+```
+
+Remove respondents with fewer than 2 measurements.
+
+```{r select_cases}
+imp_reweighted <- filter(imp_longer, id %in% ids_to_keep$id)
+colSums(is.na(filter(imp_reweighted, .imp != 0)))
+```
+
+
+Post-process imputed data to create composite variables
+
+
+```{r composite}
+imp_composite <- imp_reweighted %>%
+  mutate(
+  .,
+  #mentale gevolgen
+  ment = rowMeans(select(., q49_1, q49_2, q49_3, q49_4, q49_5, q49_6), na.rm =
+                    TRUE),  
+  #economische
+  econ = rowMeans(select(., q52, q53, q54), na.rm = TRUE),   
+  #onvrede met beleid
+  onvr = rowMeans(select(., q48_1, q48_9, q48_10, q48_11, q48_12), na.rm =
+                    TRUE),   
+  #dreiging ervaren
+  drei = rowMeans(select(., q47_1, q47_2, q47_3), na.rm = TRUE),   
+  #sociaal contact
+  cont = rowMeans(select(., q33_1, q33_2, q33_3, q33_4, q33_5, q33_6), na.rm =
+                    TRUE),
+  #eenzaamheid
+  eenz = rowMeans(select(., q34_1, q34_2, q34_3, q34_4, q34_5), na.rm =
+                    TRUE),
+  #hulp ontvangen
+  hulp = rowMeans(select(., q38_1, q38_2, q38_3, q38_4), na.rm =
+                    TRUE),
+  #mediagebruik
+  medi = rowMeans(select(
+    ., q31_1, q31_2, q31_3, q31_4, q31_5, q31_6, q31_7
+  ), na.rm = TRUE),
+  #rondkomen
+  rond = q59,
+  #gezondheid
+  gezo = q43,
+  #huishouden
+  huis = q29
+) 
+
+```
+
+Convert measurement to time in years.
+```{r yrs}
+imp_yr <- mutate(imp_composite, time_yr = meting_mnd/12)
+```
+
+Convert age to age categories.
+```{r ages}
+imp_yr$age_cat <- NA
+imp_yr[imp_yr$age < 35, "age_cat"] <- "18-34"
+imp_yr[imp_yr$age >= 35 & imp_yr$age < 50, "age_cat"] <- "35-49"
+imp_yr[imp_yr$age >= 50 & imp_yr$age < 65, "age_cat"] <- "50-64"
+imp_yr[imp_yr$age >= 65, "age_cat"] <- "65+"
+imp_yr$age_cat <- factor(imp_yr$age_cat, levels = c("18-34", "35-49", "50-64", "65+"))
+```
+
+Transform imputations back to mids object.
+```{r mids}
+imp_df <- as.data.frame(imp_yr)
+imp_df$.id <- NULL
+row.names(imp_df) <- 1:nrow(imp_df)
+imp_final <- mice::as.mids(imp_df)
+```
+
+Save the final imputations.
+```{r save_final}
+save(imp_final, file = "../Data/imp_final.Rdata")
+```
+
+# Analyses
+
+Make mids object analyzable.
+
+```{r mids_all}
+imp_all <- mice::complete(imp_final, "all")
+```
+
+## Model 1: Effect of time
+```{r fit_1, cache=FALSE}
+fit <- imp_all %>% 
+  map(~.x %$% lme4::lmer(
+    q60_1 ~ (1 | id) + time_yr, 
+    weights = .x$weegfactor
+  ))
+```
+
+AIC
+```{r aic_1, cache=FALSE}
+# Summary AIC
+fit %>% map( ~ .x %>% AIC()) %>% unlist() %>% summary()
+```
+
+Results
+```{r pool_1, cache=FALSE}
+# Pooled imputations
+results_vert <-
+  mitml::testEstimates(as.mitml.result(fit), extra.pars = TRUE)
+knitr::kable(round(results_vert$estimates[, c("Estimate", "Std.Error", "P(>|t|)")], 3))
+knitr::kable(round(results_vert$extra.pars, 3))
+# Save coefficients as csv
+table_data <- tibble::rownames_to_column(as.data.frame(results_vert$estimates[, c("Estimate", "Std.Error", "P(>|t|)")]), var = "Predictor")
+write.csv2(table_data, file = "Results/CoefficientsModel1v3.csv", row.names = FALSE)
+```
+
+## Model 1b: Time with non-linear effect
+
+```{r fit_1b, cache=FALSE}
+fit <- imp_all %>% 
+  map(~.x %$% lme4::lmer(
+    q60_1 ~ (1 | id) + time_yr + I(time_yr^2), 
+    weights = .x$weegfactor
+  ))
+```
+
+AIC
+```{r aic_1b, cache=FALSE}
+# Summary AIC
+fit %>% map( ~ .x %>% AIC()) %>% unlist() %>% summary()
+```
+
+Results
+```{r pool_1b, cache=FALSE}
+# Pooled imputations
+results_vert <-
+  mitml::testEstimates(as.mitml.result(fit), extra.pars = TRUE)
+knitr::kable(round(results_vert$estimates[, c("Estimate", "Std.Error", "P(>|t|)")], 3))
+knitr::kable(round(results_vert$extra.pars, 3))
+# Save coefficients as csv
+table_data <- tibble::rownames_to_column(as.data.frame(results_vert$estimates[, c("Estimate", "Std.Error", "P(>|t|)")]), var = "Predictor")
+write.csv2(table_data, file = "Results/CoefficientsModel1bv3.csv", row.names = FALSE)
+```
+
+## Model 2: Time, non-linear time, and demographic variables
+```{r fit_2, cache=FALSE}
+fit <- imp_all %>% 
+  map(~.x %$% lme4::lmer(
+    q60_1 ~ (1 | id) + time_yr + I(time_yr^2) +
+      age_cat + sekse + etn_herkomst + edu + huis, 
+    weights = .x$weegfactor
+  )) 
+```
+
+AIC
+```{r aic_2, cache=FALSE}
+# Summary AIC
+fit %>% map( ~ .x %>% AIC()) %>% unlist() %>% summary()
+```
+
+Results
+```{r pool_2, cache=FALSE}
+# Pooled imputations
+results_vert <-
+  mitml::testEstimates(as.mitml.result(fit), extra.pars = TRUE)
+knitr::kable(round(results_vert$estimates[, c("Estimate", "Std.Error", "P(>|t|)")], 3))
+knitr::kable(round(results_vert$extra.pars, 3))
+# Save coefficients as csv
+table_data <- tibble::rownames_to_column(as.data.frame(results_vert$estimates[, c("Estimate", "Std.Error", "P(>|t|)")]), var = "Predictor")
+write.csv2(table_data, file = "Results/CoefficientsModel2v3.csv", row.names = FALSE)
+```
+
+## Model 3: Time, all explanatory variables
+```{r fit_3, cache=FALSE}
+fit <- imp_all %>% 
+  map(~.x %$% lme4::lmer(
+    q60_1 ~ (1 | id) + time_yr +
+      age_cat + sekse + etn_herkomst + edu + huis + 
+      gezo + rond + drei + onvr, 
+    weights = .x$weegfactor
+  )) 
+```
+
+AIC
+```{r aic_3, cache=FALSE}
+# Summary AIC
+fit %>% map( ~ .x %>% AIC()) %>% unlist() %>% summary()
+```
+
+Results
+```{r pool_3, cache=FALSE}
+# Pooled imputations
+results_vert <-
+  mitml::testEstimates(as.mitml.result(fit), extra.pars = TRUE)
+knitr::kable(round(results_vert$estimates[, c("Estimate", "Std.Error", "P(>|t|)")], 3))
+knitr::kable(round(results_vert$extra.pars, 3))
+# Save coefficients as csv
+table_data <- tibble::rownames_to_column(as.data.frame(results_vert$estimates[, c("Estimate", "Std.Error", "P(>|t|)")]), var = "Predictor")
+write.csv2(table_data, file = "Results/CoefficientsModel3v3.csv", row.names = FALSE)
+```
+
+## Model 4: Time, all explanatory variables, and interaction effects of time with demographic variables
+```{r fit_4, cache=FALSE}
+fit <- imp_all %>%
+  map(
+    ~ .x %$% lme4::lmer(
+      q60_1 ~ (1 | id) + time_yr + 
+        age_cat + sekse + etn_herkomst + edu + huis +
+        gezo + rond + drei + onvr +
+        time_yr:age_cat + time_yr:sekse + time_yr:etn_herkomst + time_yr:edu + time_yr:huis,
+      weights = .x$weegfactor
+    )
+  )
+```
+
+AIC
+```{r aic_4, cache=FALSE}
+# Summary AIC
+fit %>% map( ~ .x %>% AIC()) %>% unlist() %>% summary()
+```
+
+Results
+```{r pool_4, cache=FALSE}
+# Pooled imputations
+results_vert <-
+  mitml::testEstimates(as.mitml.result(fit), extra.pars = TRUE)
+knitr::kable(round(results_vert$estimates[, c("Estimate", "Std.Error", "P(>|t|)")], 3))
+knitr::kable(round(results_vert$extra.pars, 3))
+# Save coefficients as csv
+table_data <- tibble::rownames_to_column(as.data.frame(results_vert$estimates[, c("Estimate", "Std.Error", "P(>|t|)")]), var = "Predictor")
+write.csv2(table_data, file = "Results/CoefficientsModel4v3.csv", row.names = FALSE)
+```
+
+## Model 5: Time, all explanatory variables, and all interaction effects with time
+```{r fit_5, cache=FALSE}
+fit <- imp_all %>% 
+  map(~.x %$% lme4::lmer(
+    q60_1 ~ (1 | id) + time_yr + 
+      age_cat + sekse + etn_herkomst + edu + huis + 
+      gezo + rond + drei + onvr +
+      time_yr:age_cat + time_yr:sekse + time_yr:etn_herkomst + time_yr:edu + time_yr:huis +
+      time_yr:gezo + time_yr:rond + time_yr:drei + time_yr:onvr, 
+    weights = .x$weegfactor
+  )) 
+```
+
+AIC
+```{r aic_5, cache=FALSE}
+# Summary AIC
+fit %>% map( ~ .x %>% AIC()) %>% unlist() %>% summary()
+```
+
+Results
+```{r pool_5, cache=FALSE}
+# Pooled imputations
+results_vert <-
+  mitml::testEstimates(as.mitml.result(fit), extra.pars = TRUE)
+knitr::kable(round(results_vert$estimates[, c("Estimate", "Std.Error", "P(>|t|)")], 3))
+knitr::kable(round(results_vert$extra.pars, 3))
+# Save coefficients as csv
+table_data <- tibble::rownames_to_column(as.data.frame(results_vert$estimates[, c("Estimate", "Std.Error", "P(>|t|)")]), var = "Predictor")
+table_data <- mutate(table_data, sig = ifelse(table_data$`P(>|t|)` < 0.05, "*", ""))
+write.csv2(table_data, file = "Results/CoefficientsModel5v3.csv", row.names = FALSE)
+```
+

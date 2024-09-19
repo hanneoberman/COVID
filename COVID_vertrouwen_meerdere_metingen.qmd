@@ -1,0 +1,464 @@
+---
+title: "Analyses on cases with two or more measuements"
+author: "Hanne Oberman"
+date: "`r Sys.Date()`"
+format: 
+  pdf:
+    toc: true
+    self_contained: true
+    embed-resources: true
+---
+
+This document contains the multilevel analyses to explain the variability in the outcome measure 'trust in the government' during the COVID pandemic. In these analyses, only cases with two or more measurements are included. 
+
+# Setup
+
+## Packages and functions used
+```{r setup, include=TRUE, message=FALSE, warning=FALSE}
+# set random number generator
+set.seed(11)
+
+# setup environment
+library(dplyr)      # Data wrangling improved
+library(mice)       # For incomplete data analysis
+library(miceadds)   # Additions to mice
+library(ggmice)     # Plotting device for mice
+library(lme4)       # Linear mixed-effect modeling
+library(magrittr)   # Pipes in R
+library(broom.mixed)# tidy and glance models for mixed effects classes
+library(purrr)      # functional programming
+library(ggplot2)
+options(scipen = 999)
+```
+
+## Read in the incomplete data
+
+Import the imputed data.
+```{r}
+load("../Data/imp_post.RData")
+```
+
+## Filter cases with 2+ measurements
+
+Find cases who had two or more measurements observed *before* imputation.
+```{r}
+ids_two_measurements <- imp_post$data[rowSums(is.na(imp_post$data)) < 10, ] %>% 
+  group_by(id) %>% 
+  summarise(n = n()) %>% 
+  filter(n > 1) %>%  
+  select(id)
+```
+
+Subset the data to only include cases with two or more measurements and convert time from months to years.
+
+```{r}
+imp_jr <- imp_post %>% 
+  mice::complete(., "all") %>% 
+  map(., function(.x){
+    mutate(.x, time_jr = meting_mnd/12) %>%
+    filter(id %in% ids_two_measurements$id)
+    })
+```
+
+# Compare descriptives
+
+Select relevant demographic variables.
+
+```{r}
+full_sample <- mice::complete(imp_post)[, c("meting_mnd", "sekse", "age", "etn_herkomst", "edu", "q60_1")] |> 
+  filter(meting_mnd == 0) 
+subset <- imp_jr[[1]][, c("meting_mnd", "sekse", "age", "etn_herkomst", "edu", "q60_1")] |> 
+  filter(meting_mnd == 0) 
+```
+
+Convert age into categories.
+
+```{r}
+# full sample
+full_sample$age_cat <- NA
+full_sample[full_sample$age < 35, "age_cat"] <- "18-34"
+full_sample[full_sample$age >= 35 & full_sample$age < 50, "age_cat"] <- "35-49"
+full_sample[full_sample$age >= 50 & full_sample$age < 65, "age_cat"] <- "50-64"
+full_sample[full_sample$age >= 65, "age_cat"] <- "65+"
+full_sample$age_cat <- factor(full_sample$age_cat, levels = c("18-34", "35-49", "50-64", "65+"))
+# subset
+subset$age_cat <- NA
+subset[subset$age < 35, "age_cat"] <- "18-34"
+subset[subset$age >= 35 & subset$age < 50, "age_cat"] <- "35-49"
+subset[subset$age >= 50 & subset$age < 65, "age_cat"] <- "50-64"
+subset[subset$age >= 65, "age_cat"] <- "65+"
+subset$age_cat <- factor(subset$age_cat, levels = c("18-34", "35-49", "50-64", "65+"))
+```
+
+
+Compute summary stats per variable.
+
+```{r}
+dat_plot <- rbind(
+  cbind(set = "full sample", full_sample), 
+  cbind(set = "subset", subset))
+```
+
+Sex.
+```{r}
+data.frame(rbind(summary(full_sample$sekse), summary(subset$sekse))) |> knitr::kable()
+table(full_sample$sekse)/nrow(full_sample)
+table(subset$sekse)/nrow(subset)
+ggplot(dat_plot, aes(x = sekse, fill = set)) +
+  geom_bar() +
+  facet_wrap(~set, ncol = 1, scales = "free_y") +
+  theme_classic()
+```
+
+Age.
+```{r}
+data.frame(rbind(summary(full_sample$age_cat), summary(subset$age_cat))) |> knitr::kable()
+table(full_sample$age_cat)/nrow(full_sample)
+table(subset$age_cat)/nrow(subset)
+ggplot(dat_plot, aes(x = age, fill = set)) +
+  geom_histogram() +
+  facet_wrap(~set, ncol = 1, scales = "free_y") +
+  theme_classic()
+```
+
+Migration.
+```{r}
+data.frame(rbind(summary(full_sample$etn_herkomst), summary(subset$etn_herkomst))) |> knitr::kable()
+table(full_sample$etn_herkomst)/nrow(full_sample)
+table(subset$etn_herkomst)/nrow(subset)
+ggplot(dat_plot, aes(x = etn_herkomst, fill = set)) +
+  geom_bar() +
+  facet_wrap(~set, ncol = 1, scales = "free_y") +
+  theme_classic()
+```
+
+Education.
+```{r}
+data.frame(rbind(summary(full_sample$edu), summary(subset$edu))) |> knitr::kable()
+table(full_sample$edu)/nrow(full_sample)
+table(subset$edu)/nrow(subset)
+ggplot(dat_plot, aes(x = edu, fill = set)) +
+  geom_bar() +
+  facet_wrap(~set, ncol = 1, scales = "free_y") +
+  theme_classic()
+```
+
+Outcome.
+```{r}
+mean(full_sample$q60_1)
+mean(subset$q60_1)
+ggplot(dat_plot, aes(x = q60_1, fill = set)) +
+  geom_histogram() +
+  facet_wrap(~set, ncol = 1, scales = "free_y") +
+  theme_classic()
+```
+
+
+# Analyses
+
+## Model 1: Intercept and time.
+```{r}
+fit <- imp_jr %>% 
+  map(~.x %$% lme4::lmer(
+    q60_1 ~ (1 | id) + time_jr, 
+    weights = .x$weegfactor
+  ))
+```
+
+AIC
+```{r}
+# Summary AIC
+fit %>% map( ~ .x %>% AIC()) %>% unlist() %>% summary()
+```
+
+Results
+```{r}
+# Pooled imputations
+results_vert <-
+  mitml::testEstimates(as.mitml.result(fit), extra.pars = TRUE)
+knitr::kable(round(results_vert$estimates[, c("Estimate", "Std.Error", "P(>|t|)")], 3))
+knitr::kable(round(results_vert$extra.pars, 3))
+# Save coefficients as csv
+table_data <- tibble::rownames_to_column(as.data.frame(results_vert$estimates[, c("Estimate", "Std.Error", "P(>|t|)")]), var = "Predictor")
+write.csv2(table_data, file = "../Results/CoefficientsModel1v2.csv", row.names = FALSE)
+```
+
+## Model 2: Intercept, time, time-invariant variables.
+```{r}
+fit <- imp_jr %>% 
+  map(~.x %$% lme4::lmer(
+    q60_1 ~ (1 | id) + time_jr + 
+      age + sekse + etn_herkomst + edu + huis, 
+    weights = .x$weegfactor
+  )) 
+```
+
+AIC
+```{r}
+# Summary AIC
+fit %>% map( ~ .x %>% AIC()) %>% unlist() %>% summary()
+```
+
+Results
+```{r}
+# Pooled imputations
+results_vert <-
+  mitml::testEstimates(as.mitml.result(fit), extra.pars = TRUE)
+knitr::kable(round(results_vert$estimates[, c("Estimate", "Std.Error", "P(>|t|)")], 3))
+knitr::kable(round(results_vert$extra.pars, 3))
+# Save coefficients as csv
+table_data <- tibble::rownames_to_column(as.data.frame(results_vert$estimates[, c("Estimate", "Std.Error", "P(>|t|)")]), var = "Predictor")
+write.csv2(table_data, file = "../Results/CoefficientsModel2v2.csv", row.names = FALSE)
+```
+
+## Model 3: Intercept, time, all explanatory variables.
+```{r}
+fit <- imp_jr %>% 
+  map(~.x %$% lme4::lmer(
+    q60_1 ~ (1 | id) + time_jr + 
+      age + sekse + etn_herkomst + edu + huis + 
+      gezo + rond + drei + onvr, 
+    weights = .x$weegfactor
+  )) 
+```
+
+AIC
+```{r}
+# Summary AIC
+fit %>% map( ~ .x %>% AIC()) %>% unlist() %>% summary()
+```
+
+Results
+```{r}
+# Pooled imputations
+results_vert <-
+  mitml::testEstimates(as.mitml.result(fit), extra.pars = TRUE)
+knitr::kable(round(results_vert$estimates[, c("Estimate", "Std.Error", "P(>|t|)")], 3))
+knitr::kable(round(results_vert$extra.pars, 3))
+# Save coefficients as csv
+table_data <- tibble::rownames_to_column(as.data.frame(results_vert$estimates[, c("Estimate", "Std.Error", "P(>|t|)")]), var = "Predictor")
+write.csv2(table_data, file = "../Results/CoefficientsModel3v2.csv", row.names = FALSE)
+```
+
+## Model 4: Intercept, time, all explanatory variables and interaction effects with time-invariant variables.
+```{r}
+fit <- imp_jr %>%
+  map(
+    ~ .x %$% lme4::lmer(
+      q60_1 ~ (1 | id) + time_jr + 
+        age + sekse + etn_herkomst + edu + huis +
+        gezo + rond + drei + onvr +
+        time_jr:age + time_jr:sekse + time_jr:etn_herkomst + time_jr:edu + time_jr:huis,
+      weights = .x$weegfactor
+    )
+  )
+```
+
+AIC
+```{r}
+# Summary AIC
+fit %>% map( ~ .x %>% AIC()) %>% unlist() %>% summary()
+```
+
+Results
+```{r}
+# Pooled imputations
+results_vert <-
+  mitml::testEstimates(as.mitml.result(fit), extra.pars = TRUE)
+knitr::kable(round(results_vert$estimates[, c("Estimate", "Std.Error", "P(>|t|)")], 3))
+knitr::kable(round(results_vert$extra.pars, 3))
+# Save coefficients as csv
+table_data <- tibble::rownames_to_column(as.data.frame(results_vert$estimates[, c("Estimate", "Std.Error", "P(>|t|)")]), var = "Predictor")
+write.csv2(table_data, file = "../Results/CoefficientsModel4v2.csv", row.names = FALSE)
+```
+
+## Model 5: Intercept, time, all explanatory variables and all interaction effects.
+```{r}
+fit <- imp_jr %>% 
+  map(~.x %$% lme4::lmer(
+    q60_1 ~ (1 | id) + time_jr + age + sekse + etn_herkomst + edu + huis + 
+        gezo + rond + drei + onvr +
+        time_jr:age + time_jr:sekse + time_jr:etn_herkomst + time_jr:edu + time_jr:huis +
+        time_jr:gezo + time_jr:rond + time_jr:drei + time_jr:onvr, 
+    weights = .x$weegfactor
+  )) 
+```
+
+AIC
+```{r}
+# Summary AIC
+fit %>% map( ~ .x %>% AIC()) %>% unlist() %>% summary()
+```
+
+Results
+```{r}
+# Pooled imputations
+results_vert <-
+  mitml::testEstimates(as.mitml.result(fit), extra.pars = TRUE)
+knitr::kable(round(results_vert$estimates[, c("Estimate", "Std.Error", "P(>|t|)")], 3))
+knitr::kable(round(results_vert$extra.pars, 3))
+# Save coefficients as csv
+table_data <- tibble::rownames_to_column(as.data.frame(results_vert$estimates[, c("Estimate", "Std.Error", "P(>|t|)")]), var = "Predictor")
+table_data <- mutate(table_data, sig = ifelse(table_data$`P(>|t|)` < 0.05, "*", ""))
+write.csv2(table_data, file = "../Results/CoefficientsModel5v2.csv", row.names = FALSE)
+```
+
+# Analyses with new weights
+
+## Load new data
+
+```{r}
+library(haven)
+Alle_metingen_lang_bestand_REWEIGHTED_toshare_240814 <- read_sav("Data/Alle metingen_lang bestand_REWEIGHTED_toshare_240814.sav")
+View(Alle_metingen_lang_bestand_REWEIGHTED_toshare_240814)
+```
+
+
+
+
+## Model 1: Intercept and time.
+```{r}
+fit <- imp_jr %>% 
+  map(~.x %$% lme4::lmer(
+    q60_1 ~ (1 | id) + time_jr, 
+    weights = .x$weegfactor
+  ))
+```
+
+AIC
+```{r}
+# Summary AIC
+fit %>% map( ~ .x %>% AIC()) %>% unlist() %>% summary()
+```
+
+Results
+```{r}
+# Pooled imputations
+results_vert <-
+  mitml::testEstimates(as.mitml.result(fit), extra.pars = TRUE)
+knitr::kable(round(results_vert$estimates[, c("Estimate", "Std.Error", "P(>|t|)")], 3))
+knitr::kable(round(results_vert$extra.pars, 3))
+# Save coefficients as csv
+table_data <- tibble::rownames_to_column(as.data.frame(results_vert$estimates[, c("Estimate", "Std.Error", "P(>|t|)")]), var = "Predictor")
+write.csv2(table_data, file = "../Results/CoefficientsModel1v2.csv", row.names = FALSE)
+```
+
+## Model 2: Intercept, time, time-invariant variables.
+```{r}
+fit <- imp_jr %>% 
+  map(~.x %$% lme4::lmer(
+    q60_1 ~ (1 | id) + time_jr + 
+      age + sekse + etn_herkomst + edu + huis, 
+    weights = .x$weegfactor
+  )) 
+```
+
+AIC
+```{r}
+# Summary AIC
+fit %>% map( ~ .x %>% AIC()) %>% unlist() %>% summary()
+```
+
+Results
+```{r}
+# Pooled imputations
+results_vert <-
+  mitml::testEstimates(as.mitml.result(fit), extra.pars = TRUE)
+knitr::kable(round(results_vert$estimates[, c("Estimate", "Std.Error", "P(>|t|)")], 3))
+knitr::kable(round(results_vert$extra.pars, 3))
+# Save coefficients as csv
+table_data <- tibble::rownames_to_column(as.data.frame(results_vert$estimates[, c("Estimate", "Std.Error", "P(>|t|)")]), var = "Predictor")
+write.csv2(table_data, file = "../Results/CoefficientsModel2v2.csv", row.names = FALSE)
+```
+
+## Model 3: Intercept, time, all explanatory variables.
+```{r}
+fit <- imp_jr %>% 
+  map(~.x %$% lme4::lmer(
+    q60_1 ~ (1 | id) + time_jr + 
+      age + sekse + etn_herkomst + edu + huis + 
+      gezo + rond + drei + onvr, 
+    weights = .x$weegfactor
+  )) 
+```
+
+AIC
+```{r}
+# Summary AIC
+fit %>% map( ~ .x %>% AIC()) %>% unlist() %>% summary()
+```
+
+Results
+```{r}
+# Pooled imputations
+results_vert <-
+  mitml::testEstimates(as.mitml.result(fit), extra.pars = TRUE)
+knitr::kable(round(results_vert$estimates[, c("Estimate", "Std.Error", "P(>|t|)")], 3))
+knitr::kable(round(results_vert$extra.pars, 3))
+# Save coefficients as csv
+table_data <- tibble::rownames_to_column(as.data.frame(results_vert$estimates[, c("Estimate", "Std.Error", "P(>|t|)")]), var = "Predictor")
+write.csv2(table_data, file = "../Results/CoefficientsModel3v2.csv", row.names = FALSE)
+```
+
+## Model 4: Intercept, time, all explanatory variables and interaction effects with time-invariant variables.
+```{r}
+fit <- imp_jr %>%
+  map(
+    ~ .x %$% lme4::lmer(
+      q60_1 ~ (1 | id) + time_jr + 
+        age + sekse + etn_herkomst + edu + huis +
+        gezo + rond + drei + onvr +
+        time_jr:age + time_jr:sekse + time_jr:etn_herkomst + time_jr:edu + time_jr:huis,
+      weights = .x$weegfactor
+    )
+  )
+```
+
+AIC
+```{r}
+# Summary AIC
+fit %>% map( ~ .x %>% AIC()) %>% unlist() %>% summary()
+```
+
+Results
+```{r}
+# Pooled imputations
+results_vert <-
+  mitml::testEstimates(as.mitml.result(fit), extra.pars = TRUE)
+knitr::kable(round(results_vert$estimates[, c("Estimate", "Std.Error", "P(>|t|)")], 3))
+knitr::kable(round(results_vert$extra.pars, 3))
+# Save coefficients as csv
+table_data <- tibble::rownames_to_column(as.data.frame(results_vert$estimates[, c("Estimate", "Std.Error", "P(>|t|)")]), var = "Predictor")
+write.csv2(table_data, file = "../Results/CoefficientsModel4v2.csv", row.names = FALSE)
+```
+
+## Model 5: Intercept, time, all explanatory variables and all interaction effects.
+```{r}
+fit <- imp_jr %>% 
+  map(~.x %$% lme4::lmer(
+    q60_1 ~ (1 | id) + time_jr + age + sekse + etn_herkomst + edu + huis + 
+        gezo + rond + drei + onvr +
+        time_jr:age + time_jr:sekse + time_jr:etn_herkomst + time_jr:edu + time_jr:huis +
+        time_jr:gezo + time_jr:rond + time_jr:drei + time_jr:onvr, 
+    weights = .x$weegfactor
+  )) 
+```
+
+AIC
+```{r}
+# Summary AIC
+fit %>% map( ~ .x %>% AIC()) %>% unlist() %>% summary()
+```
+
+Results
+```{r}
+# Pooled imputations
+results_vert <-
+  mitml::testEstimates(as.mitml.result(fit), extra.pars = TRUE)
+knitr::kable(round(results_vert$estimates[, c("Estimate", "Std.Error", "P(>|t|)")], 3))
+knitr::kable(round(results_vert$extra.pars, 3))
+# Save coefficients as csv
+table_data <- tibble::rownames_to_column(as.data.frame(results_vert$estimates[, c("Estimate", "Std.Error", "P(>|t|)")]), var = "Predictor")
+table_data <- mutate(table_data, sig = ifelse(table_data$`P(>|t|)` < 0.05, "*", ""))
+write.csv2(table_data, file = "../Results/CoefficientsModel5v2.csv", row.names = FALSE)
+```
