@@ -1,9 +1,10 @@
 ---
 title: "Analyses trust in the government during the COVID-19 pandemic"
 author: "Hanne Oberman"
-format: html
-toc: true
-self-contained: true
+format:
+  html:
+    embed-resources: true
+    toc: true
 execute: 
   cache: true
 ---
@@ -396,7 +397,7 @@ knitr::kable(round(results_vert$estimates[, c("Estimate", "Std.Error", "P(>|t|)"
 knitr::kable(round(results_vert$extra.pars, 3))
 # Save coefficients as csv
 table_data <- tibble::rownames_to_column(as.data.frame(results_vert$estimates[, c("Estimate", "Std.Error", "P(>|t|)")]), var = "Predictor")
-write.csv2(table_data, file = "Results/CoefficientsModel1v3.csv", row.names = FALSE)
+write.csv2(table_data, file = "Results/CoefficientsModel1.csv", row.names = FALSE)
 ```
 
 ## Model 1b: Time with non-linear effect
@@ -424,15 +425,15 @@ knitr::kable(round(results_vert$estimates[, c("Estimate", "Std.Error", "P(>|t|)"
 knitr::kable(round(results_vert$extra.pars, 3))
 # Save coefficients as csv
 table_data <- tibble::rownames_to_column(as.data.frame(results_vert$estimates[, c("Estimate", "Std.Error", "P(>|t|)")]), var = "Predictor")
-write.csv2(table_data, file = "Results/CoefficientsModel1bv3.csv", row.names = FALSE)
+write.csv2(table_data, file = "Results/CoefficientsModel1b.csv", row.names = FALSE)
 ```
 
 ## Model 2: Time, non-linear time, and demographic variables
 ```{r fit_2, cache=FALSE}
 fit <- imp_all %>% 
   map(~.x %$% lme4::lmer(
-    q60_1 ~ (1 | id) + time_yr + I(time_yr^2) +
-      age_cat + sekse + etn_herkomst + edu + huis, 
+    q60_1 ~ (1 | id) + time_yr + 
+      age + sekse + etn_herkomst + edu + huis, 
     weights = .x$weegfactor
   )) 
 ```
@@ -452,7 +453,7 @@ knitr::kable(round(results_vert$estimates[, c("Estimate", "Std.Error", "P(>|t|)"
 knitr::kable(round(results_vert$extra.pars, 3))
 # Save coefficients as csv
 table_data <- tibble::rownames_to_column(as.data.frame(results_vert$estimates[, c("Estimate", "Std.Error", "P(>|t|)")]), var = "Predictor")
-write.csv2(table_data, file = "Results/CoefficientsModel2v3.csv", row.names = FALSE)
+write.csv2(table_data, file = "Results/CoefficientsModel2.csv", row.names = FALSE)
 ```
 
 ## Model 3: Time, all explanatory variables
@@ -460,7 +461,7 @@ write.csv2(table_data, file = "Results/CoefficientsModel2v3.csv", row.names = FA
 fit <- imp_all %>% 
   map(~.x %$% lme4::lmer(
     q60_1 ~ (1 | id) + time_yr +
-      age_cat + sekse + etn_herkomst + edu + huis + 
+      age + sekse + etn_herkomst + edu + huis + 
       gezo + rond + drei + onvr, 
     weights = .x$weegfactor
   )) 
@@ -481,7 +482,7 @@ knitr::kable(round(results_vert$estimates[, c("Estimate", "Std.Error", "P(>|t|)"
 knitr::kable(round(results_vert$extra.pars, 3))
 # Save coefficients as csv
 table_data <- tibble::rownames_to_column(as.data.frame(results_vert$estimates[, c("Estimate", "Std.Error", "P(>|t|)")]), var = "Predictor")
-write.csv2(table_data, file = "Results/CoefficientsModel3v3.csv", row.names = FALSE)
+write.csv2(table_data, file = "Results/CoefficientsModel3.csv", row.names = FALSE)
 ```
 
 ## Model 4: Time, all explanatory variables, and interaction effects of time with demographic variables
@@ -490,9 +491,9 @@ fit <- imp_all %>%
   map(
     ~ .x %$% lme4::lmer(
       q60_1 ~ (1 | id) + time_yr + 
-        age_cat + sekse + etn_herkomst + edu + huis +
+        age + sekse + etn_herkomst + edu + huis +
         gezo + rond + drei + onvr +
-        time_yr:age_cat + time_yr:sekse + time_yr:etn_herkomst + time_yr:edu + time_yr:huis,
+        time_yr:age + time_yr:sekse + time_yr:etn_herkomst + time_yr:edu + time_yr:huis,
       weights = .x$weegfactor
     )
   )
@@ -513,7 +514,7 @@ knitr::kable(round(results_vert$estimates[, c("Estimate", "Std.Error", "P(>|t|)"
 knitr::kable(round(results_vert$extra.pars, 3))
 # Save coefficients as csv
 table_data <- tibble::rownames_to_column(as.data.frame(results_vert$estimates[, c("Estimate", "Std.Error", "P(>|t|)")]), var = "Predictor")
-write.csv2(table_data, file = "Results/CoefficientsModel4v3.csv", row.names = FALSE)
+write.csv2(table_data, file = "Results/CoefficientsModel4.csv", row.names = FALSE)
 ```
 
 ## Model 5: Time, all explanatory variables, and all interaction effects with time
@@ -521,9 +522,9 @@ write.csv2(table_data, file = "Results/CoefficientsModel4v3.csv", row.names = FA
 fit <- imp_all %>% 
   map(~.x %$% lme4::lmer(
     q60_1 ~ (1 | id) + time_yr + 
-      age_cat + sekse + etn_herkomst + edu + huis + 
+      age + sekse + etn_herkomst + edu + huis + 
       gezo + rond + drei + onvr +
-      time_yr:age_cat + time_yr:sekse + time_yr:etn_herkomst + time_yr:edu + time_yr:huis +
+      time_yr:age + time_yr:sekse + time_yr:etn_herkomst + time_yr:edu + time_yr:huis +
       time_yr:gezo + time_yr:rond + time_yr:drei + time_yr:onvr, 
     weights = .x$weegfactor
   )) 
@@ -545,6 +546,238 @@ knitr::kable(round(results_vert$extra.pars, 3))
 # Save coefficients as csv
 table_data <- tibble::rownames_to_column(as.data.frame(results_vert$estimates[, c("Estimate", "Std.Error", "P(>|t|)")]), var = "Predictor")
 table_data <- mutate(table_data, sig = ifelse(table_data$`P(>|t|)` < 0.05, "*", ""))
-write.csv2(table_data, file = "Results/CoefficientsModel5v3.csv", row.names = FALSE)
+write.csv2(table_data, file = "Results/CoefficientsModel5.csv", row.names = FALSE)
 ```
 
+# Some checks
+
+The correlation between time and the outcome on individual level
+```{r cor_time_outcome}
+map(imp_all, ~cor(.x$q60_1, .x$time_yr))
+```
+
+Plot this relation
+```{r plot_time_outcome}
+library(ggplot2)
+ggplot(imp_all[[1]], aes(x = time_yr, y = q60_1)) +
+  geom_point() +
+  geom_smooth(method = "loess", se = FALSE) +
+  theme_classic()
+```
+
+Correlation of trust with time in months
+```{r cor_means}
+means <- map(imp_all, ~.x %>% 
+        group_by(meting_mnd) %>% 
+        select(q60_1, meting_mnd) %>% 
+        summarise_all(.funs = mean)) %>% 
+  Reduce("+", .) / 10
+cor(means)
+```
+
+Check means time-varying variables, including outcome
+```{r means_varying}
+map(imp_all, ~.x %>% 
+        select(meting_mnd, q60_1, gezo, rond, medi, hulp, eenz, cont, drei, onvr, econ, ment) %>% 
+        group_by(meting_mnd) %>% 
+        summarise_all(.funs = mean)) %>% 
+  Reduce("+", .) / 10
+```
+
+
+# Analyses with centering
+
+## Model 3b: Time, all explanatory variables, centered
+```{r fit_3b, cache=FALSE}
+fit <- imp_all %>%
+  map(
+    ~ .x %>%
+      group_by(meting_mnd) %>%
+      mutate(
+        gezo_mean = mean(gezo, na.rm = TRUE),
+        gezo_dev = gezo - gezo_mean,
+        rond_mean = mean(rond, na.rm = TRUE),
+        rond_dev = rond - rond_mean,
+        drei_mean = mean(drei, na.rm = TRUE),
+        drei_dev = drei - drei_mean,
+        onvr_mean = mean(onvr, na.rm = TRUE),
+        onvr_dev = onvr - onvr_mean
+      ) %>%
+      ungroup(meting_mnd) %$%
+      lme4::lmer(
+        q60_1 ~ (1 | id) + time_yr +
+          age + sekse + etn_herkomst + edu + huis +
+          gezo_dev + rond_dev + drei_dev + onvr_dev,
+        weights = .x$weegfactor
+      )
+  )
+```
+
+AIC
+```{r aic_3b, cache=FALSE}
+# Summary AIC
+fit %>% map( ~ .x %>% AIC()) %>% unlist() %>% summary()
+```
+
+Results
+```{r pool_3b, cache=FALSE}
+# Pooled imputations
+results_vert <-
+  mitml::testEstimates(as.mitml.result(fit), extra.pars = TRUE)
+knitr::kable(round(results_vert$estimates[, c("Estimate", "Std.Error", "P(>|t|)")], 3))
+knitr::kable(round(results_vert$extra.pars, 3))
+# Save coefficients as csv
+table_data <- tibble::rownames_to_column(as.data.frame(results_vert$estimates[, c("Estimate", "Std.Error", "P(>|t|)")]), var = "Predictor")
+write.csv2(table_data, file = "Results/CoefficientsModel3b.csv", row.names = FALSE)
+```
+
+## Model 4b: Time, all explanatory variables, and interaction effects of time with demographic variables, centered
+```{r fit_4b, cache=FALSE}
+fit <- imp_all %>%
+  map(
+    ~ .x %>%
+      group_by(meting_mnd) %>%
+      mutate(
+        gezo_mean = mean(gezo, na.rm = TRUE),
+        gezo_dev = gezo - gezo_mean,
+        rond_mean = mean(rond, na.rm = TRUE),
+        rond_dev = rond - rond_mean,
+        drei_mean = mean(drei, na.rm = TRUE),
+        drei_dev = drei - drei_mean,
+        onvr_mean = mean(onvr, na.rm = TRUE),
+        onvr_dev = onvr - onvr_mean
+      ) %>%
+      ungroup(meting_mnd) %$%
+      lme4::lmer(
+        q60_1 ~ (1 | id) + time_yr +
+          age + sekse + etn_herkomst + edu + huis +
+          gezo_dev + rond_dev + drei_dev + onvr_dev +
+          time_yr:age + time_yr:sekse + time_yr:etn_herkomst + time_yr:edu + time_yr:huis,
+        weights = .x$weegfactor
+      )
+  )
+```
+
+AIC
+```{r aic_4b, cache=FALSE}
+# Summary AIC
+fit %>% map( ~ .x %>% AIC()) %>% unlist() %>% summary()
+```
+
+Results
+```{r pool_4b, cache=FALSE}
+# Pooled imputations
+results_vert <-
+  mitml::testEstimates(as.mitml.result(fit), extra.pars = TRUE)
+knitr::kable(round(results_vert$estimates[, c("Estimate", "Std.Error", "P(>|t|)")], 3))
+knitr::kable(round(results_vert$extra.pars, 3))
+# Save coefficients as csv
+table_data <- tibble::rownames_to_column(as.data.frame(results_vert$estimates[, c("Estimate", "Std.Error", "P(>|t|)")]), var = "Predictor")
+write.csv2(table_data, file = "Results/CoefficientsModel4b.csv", row.names = FALSE)
+```
+
+## Model 5b: Time, all explanatory variables, and all interaction effects with time, centered
+```{r fit_5b, cache=FALSE}
+fit <- imp_all %>%
+  map(
+    ~ .x %>%
+      group_by(meting_mnd) %>%
+      mutate(
+        gezo_mean = mean(gezo, na.rm = TRUE),
+        gezo_dev = gezo - gezo_mean,
+        rond_mean = mean(rond, na.rm = TRUE),
+        rond_dev = rond - rond_mean,
+        drei_mean = mean(drei, na.rm = TRUE),
+        drei_dev = drei - drei_mean,
+        onvr_mean = mean(onvr, na.rm = TRUE),
+        onvr_dev = onvr - onvr_mean
+      ) %>%
+      ungroup(meting_mnd) %$%
+      lme4::lmer(
+        q60_1 ~ (1 | id) + time_yr +
+          age + sekse + etn_herkomst + edu + huis +
+          gezo_dev + rond_dev + drei_dev + onvr_dev +
+          time_yr:age + time_yr:sekse + time_yr:etn_herkomst + time_yr:edu + time_yr:huis +
+          time_yr:gezo_dev + time_yr:rond_dev + time_yr:drei_dev + time_yr:onvr_dev,
+        weights = .x$weegfactor
+      )
+  )
+```
+
+AIC
+```{r aic_5b, cache=FALSE}
+# Summary AIC
+fit %>% map( ~ .x %>% AIC()) %>% unlist() %>% summary()
+```
+
+Results
+```{r pool_5b, cache=FALSE}
+# Pooled imputations
+results_vert <-
+  mitml::testEstimates(as.mitml.result(fit), extra.pars = TRUE)
+knitr::kable(round(results_vert$estimates[, c("Estimate", "Std.Error", "P(>|t|)")], 3))
+knitr::kable(round(results_vert$extra.pars, 3))
+# Save coefficients as csv
+table_data <- tibble::rownames_to_column(as.data.frame(results_vert$estimates[, c("Estimate", "Std.Error", "P(>|t|)")]), var = "Predictor")
+table_data <- mutate(table_data, sig = ifelse(table_data$`P(>|t|)` < 0.05, "*", ""))
+write.csv2(table_data, file = "Results/CoefficientsModel5b.csv", row.names = FALSE)
+```
+
+# Questions Erik 25-09-2024
+
+## Sample size
+
+```{r sample_size}
+dat_before_imp <- filter(dat_clean, id %in% ids_to_keep$id)
+length(unique(dat_before_imp$id))
+length(unique(imp_final$data$id))
+```
+
+## Demographics per wave
+
+```{r demographics}
+# sekse
+table(dat_before_imp$sekse, dat_before_imp$meting_mnd) #before imputation
+table(imp_final$data$sekse, imp_final$data$meting_mnd) #after imputation (=Total)
+# leeftijd
+dat_before_imp$age_cat <- NA
+dat_before_imp[dat_before_imp$age < 35, "age_cat"] <- "18-34"
+dat_before_imp[dat_before_imp$age >= 35 & dat_before_imp$age < 50, "age_cat"] <- "35-49"
+dat_before_imp[dat_before_imp$age >= 50 & dat_before_imp$age < 65, "age_cat"] <- "50-64"
+dat_before_imp[dat_before_imp$age >= 65, "age_cat"] <- "65+"
+dat_before_imp$age_cat <- factor(dat_before_imp$age_cat, levels = c("18-34", "35-49", "50-64", "65+"))
+table(dat_before_imp$age_cat, dat_before_imp$meting_mnd)
+table(imp_final$data$age_cat, imp_final$data$meting_mnd)
+# etn_herkomst
+table(dat_before_imp$etn_herkomst, dat_before_imp$meting_mnd)
+table(imp_final$data$etn_herkomst, imp_final$data$meting_mnd)
+# opleiding
+table(dat_before_imp$edu, dat_before_imp$meting_mnd)
+table(imp_final$data$edu, imp_final$data$meting_mnd)
+# n
+table(dat_before_imp$meting_mnd)
+table(imp_final$data$meting_mnd)
+```
+
+## Weighted average of varying variables
+
+```{r weighted_means}
+weighted_mean_per_wave <- function(varname){purrr::map_dfr(imp_all, function(.x){
+    per_meting <- split(.x, .x$meting_mnd) 
+    purrr::map_dbl(per_meting, function(.y){
+      weighted.mean(.y[, varname], w = .y$weegfactor)})
+})}
+# outcome
+colMeans(weighted_mean_per_wave("q60_1"))
+# covariates
+colMeans(weighted_mean_per_wave("gezo"))
+colMeans(weighted_mean_per_wave("rond"))
+colMeans(weighted_mean_per_wave("onvr"))
+colMeans(weighted_mean_per_wave("drei"))
+
+# map_dfr(imp_all, function(.x){
+#     per_meting <- split(.x, .x$meting_mnd) 
+#     map_dbl(per_meting, function(.y){
+#       weighted.mean(.y$q60_1, w = .y$weegfactor)})
+# })
+```
